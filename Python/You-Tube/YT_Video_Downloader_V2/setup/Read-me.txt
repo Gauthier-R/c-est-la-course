@@ -1,0 +1,103 @@
+===================================
+Bienvenue sur YT-Video-Downloader !
+===================================
+
+Mon application pour télécharger n'importe quelle vidéo Youtube. Téléchargez le fichier ZIP pour récupérer l'application !
+
+SOMMAIRE :
+
+-> Version et nouveautés
+-> Guide d'utilisation de l'application : YT_Video_Downloader.exe
+-> Guide d'interface de l'application : YT_Video_Downloader.exe
+
+
+==================
+NEW VERSION : 2.3 
+==================
+
+Correctif d'affichage du répertoire par défaut et bug !
+
+-> Modification et simplification de l'affichage du répertoire par défaut 
+-> Correctif d'erreur lié à la suppression du fichier mémoire pour le répertoire par défaut
+
+
+==================
+NEW VERSION : 2.2 
+==================
+
+Possibilité de définir un répertoire par défault pour le dépôt de vos vidéos téléchargées !
+
+-> Ajout de la fonctionnalitée pour définir un répertoire par défaut lors de la première utilisation de l'app
+-> Ajout d'un fichier de mémorisation de votre répertoire par défaut 
+-> Ajout d'un widget "Folder" pour connaître le répertoire par défaut de vos vidéos
+-> Ajout d'un bouton "Modify" par lequel vous pourrez définir le dossier par défaut
+
+==================
+NEW VERSION : 2.1 
+==================
+
+Barre de chargement et information de l'avancée de votre téléchargement !
+
+-> Ajout d'une barre de chargement indiquant la progression de votre téléchargement
+-> Ajout d'un indicateur de pourcentage du téléchargement de la vidéo
+-> Modification des informations liées à la recherche et téléchargement des vidéos
+
+
+==================
+NEW VERSION : 2.0 
+==================
+
+Refonte complète du GUI design !
+
+-> Ajout d'un fond de thème adapter à votre thème par défault Windows 
+-> Redisposition des widgets sur l'interface 
+-> Modification du logo de l'application 
+
+ 
+
+
+==============================================================
+Guide d'utilisation de l'application : YT_Video_Downloader.exe
+==============================================================
+
+Extraire les éléments du fichier YT_Video_Downloader.zip :
+->	Clique droit sur le dossier zip
+->	Faire "Extraire-tout"
+
+Ajouter l'application à son burreau :
+->	Ouvrir le dossier YT_Video_Downloader
+->	Clique droit sur l'application YT_Video_Downloader.exe
+->	Faire "Envoyer vers" puis "Burreau"
+
+Ouvrir l'application :
+->	Exécuter l'application YT_Video_Downloader.exe
+
+============================================================
+Guide d'interface de l'application : YT_Video_Downloader.exe
+============================================================
+
+Récupérer l'URL de la vidéo YouTube :
+->	Se rendre sur www.youtube.com
+->	Rechercher la vidéo qui vous intéresse
+-> 	Cliquer sur partager
+-> 	Copier le lien de la vidéo
+
+Rechercher une vidéo avec l'application :
+->	Renseigner dans la barre de recherche de l'application, l'URL de la vidéo
+->	Cliquer sur le bouton "Rechercher"
+
+Télécharger une vidéo avec l'application :
+->	Une fois la vidéo "Rechercher" et trouvé par l'application
+->	Cliquer sur télécharger
+
+Accès au répertoire de téléchargement des vidéos :
+-> 	Cliquer sur le bouton "📁"
+-> 	Vos vidéos seront automatiquement déposés ici
+
+Modifier le répertoire de téléchargement des vidéos :
+->	Cliquer sur le bouton "Modify"
+->	Sélectionner votre nouveau dossier par défaut
+-> 	Le label "Folder" s'est mis à jour
+
+
+BONNE VIDEO !🎥
