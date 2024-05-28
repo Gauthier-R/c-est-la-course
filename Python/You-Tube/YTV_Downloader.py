@@ -1,3 +1,6 @@
+#   ------COMMANDE DE CREATION .EXE------
+#   pyinstaller YTV_Downloader.py --onefile --icon=setup/youtube.ico --noconsole 
+
 from pytube import Search, YouTube, Playlist
 import customtkinter
 from tkinter import Tk, END, filedialog
@@ -194,7 +197,7 @@ class Pytube_Download:
 class Folder:
     
     def __init__(self, LABEL_PATH=None) :
-        self.path_json_file = "setup/Default_Localisation_Folder.json"
+        self.path_json_file = "C:\\Users\\gauth\\OneDrive\\Documents\\Libre office\\Projet Code\\Python\\You-Tube\\setup\\Default_Localisation_Folder.json"
         self.LABEL_PATH = LABEL_PATH
     
 
@@ -298,14 +301,14 @@ class Main_Screen:
         self.SCREEN.title("YTV_Downloader")
         screen_widht,screen_height = self.SCREEN.winfo_screenwidth(),self.SCREEN.winfo_screenheight()
         self.SCREEN.geometry((f"{round(screen_widht//1.5)}x{round(screen_height//1.5)}"))
-        self.SCREEN.iconbitmap('setup/youtube.ico')
+        self.SCREEN.iconbitmap("C:\\Users\\gauth\\OneDrive\\Documents\\Libre office\\Projet Code\\Python\\You-Tube\\setup\\youtube.ico")
         
         #Créer un Frame pour afficher les éléments
         self.FRAME = customtkinter.CTkFrame(self.SCREEN, fg_color="transparent")
         self.FRAME.pack(expand=True, pady=5)
         
         #Créer le Logo
-        image = Image.open('setup/logo_yt.png')
+        image = Image.open("C:\\Users\\gauth\\OneDrive\\Documents\\Libre office\\Projet Code\\Python\\You-Tube\\setup\\logo_yt.png")
         image_tk = customtkinter.CTkImage(light_image=image, size=(400,175))
 
 
