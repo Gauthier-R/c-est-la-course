@@ -1,22 +1,30 @@
-import pygame
-pygame.init()
+import pygame, sys
+from settings import *
+from level import Level
 
-class Game :
+class Game:
     
     def __init__(self) :
-    #Créer la fenêtre du jeu
-        pygame.display.set_mode((800, 800))
-        pygame.display.set_caption("Mon_Jeu")
-    
-    
+        pygame.init()
+        self.SCREEN = pygame.display.set_mode((SCREEN_WIDHT, SCREEN_HEIGHT))
+        pygame.display.set_caption('Elementium')
+        self.CLOCK = pygame.time.Clock()
+        self.LEVEL = Level()
+        
+        
+        
     def run(self):
-
-        #Boucle du jeu
-        running = True
-
-        while running :
+        
+        while True:
+            
             for event in pygame.event.get():
+                
                 if event.type == pygame.QUIT:
-                    running = False
-
-        pygame.quit()
+                    pygame.quit()
+                    sys.exit()
+                    
+            dt = self.CLOCK.tick()/1000
+            self.LEVEL.run(dt)
+            
+            pygame.display.update()
+        
