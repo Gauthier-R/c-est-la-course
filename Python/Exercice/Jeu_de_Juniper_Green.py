@@ -37,7 +37,4 @@ def eratosthene(n):
         
     for indice, valide in enumerate(liste_valide):
         if valide:
-            print(liste_nombre[indice], end=', ')
-            
-eratosthene(20)
-        
+            print(liste_nombre[indice], end=', ')             
