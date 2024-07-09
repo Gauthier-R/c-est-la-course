@@ -186,5 +186,4 @@ def exercice_5(value : int):
 #exercice_2()
 #exercice_3("WUJ MWULYQW HWLQMFNQ LUFJQTW")
 #exercice_4()
-exercice_5(4)
-
+#exercice_5(4)
