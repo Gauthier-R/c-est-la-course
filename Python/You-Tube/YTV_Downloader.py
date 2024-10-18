@@ -1,7 +1,7 @@
 #   ------COMMANDE DE CREATION .EXE------
 #   pyinstaller YTV_Downloader.py --onefile --icon=setup/youtube.ico --noconsole 
 
-from pytube import Search, YouTube, Playlist
+from pytubefix import Search, YouTube, Playlist
 import customtkinter
 from tkinter import Tk, END, filedialog
 import os
@@ -384,7 +384,7 @@ class Main_Screen:
         
         
               
-    def vérifier_contenu(self): #Vérifier le contenu de la barre de recherche
+    def vérifier_contenu(self): # Vérifier le contenu de la barre de recherche
         
         if self.ENTRY.get() != '' and self.ENTRY.get() != self.SEARCH.element:
             self.SEARCH.element = self.ENTRY.get()
