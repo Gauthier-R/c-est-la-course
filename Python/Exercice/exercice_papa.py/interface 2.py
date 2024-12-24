@@ -1,4 +1,27 @@
 import customtkinter as ctk
+from db_connect import Database
+
+#On crée une instance de la classe Database
+bdd = Database()
+
+def envoyer_info(event = None):
+    bdd.text_entry = entre1.get()
+    bdd.bouton_radio = var_bouton.get()
+    bdd.bouton_segment = bouton_segmente.get()
+    bdd.bouton_option = optionmenu.get()
+    bdd.checkbox_droit = var_check_droit.get()
+    bdd.checkbox_cookie = var_check_cookie.get()
+    bdd.envoyer_info_questionnaire() #On envoie les informations à la base de données
+    
+def recup_info(event = None):
+    resultat = bdd.voir_info_questionnaire() #On récupère les informations de la base de données
+    
+    for row in resultat: #On parcourt les résultats
+        
+        for i in range(len(row)): #On parcourt les colonnes
+                ctk.CTkLabel(frame2, text=row[i], bg_color= "white").grid(row=resultat.index(row), column=i)
+                    
+    
 
 fenetre = ctk.CTk()
 fenetre.title('Interface métier')
@@ -114,13 +137,13 @@ text3 = ctk.CTkLabel(frame1,
                      font=('Helvetica', 12, 'italic'))
 text3.grid(row = 4, column = 1, padx = 10)
 
-var_segmente = ctk.StringVar(value="Choix 1")
+
 
 bouton_segmente = ctk.CTkSegmentedButton(frame1,
                                          width=150,
                                          height=30,
-                                         values=['Choix 1', 'Choix 2', 'Choix 3'],
-                                         variable=var_segmente)
+                                         values=['Choix 1', 'Choix 2', 'Choix 3'])
+bouton_segmente.set("Choix 1")
 bouton_segmente.grid(row = 4, column = 2, sticky = 'w')
 
 frame1.grid_rowconfigure(5,pad=50)
@@ -143,26 +166,26 @@ text5 = ctk.CTkLabel(frame1,
                      font=('Helvetica', 12, 'italic'))
 text5.grid(row = 6, column = 1, padx = 10)
 
-var_check_droit = ctk.StringVar(value="off")
+var_check_droit = ctk.StringVar(value=0)
 checkbox_droit = ctk.CTkCheckBox(frame1, 
                            text="Accepter les droits",
                            text_color= 'grey',
                            border_color= 'orange',
                            variable=var_check_droit, 
-                           onvalue="on", 
-                           offvalue="off")
+                           onvalue=1, 
+                           offvalue=0)
 checkbox_droit.grid(row = 6, column = 2, sticky = 'w')
 
 
 
-var_check_cookie = ctk.StringVar(value="off")
+var_check_cookie = ctk.StringVar(value=False)
 checkbox_cookie = ctk.CTkCheckBox(frame1, 
                            text="Accepter les cookies",
                            text_color= 'grey',
                            border_color= 'orange',
                            variable=var_check_cookie, 
-                           onvalue="on", 
-                           offvalue="off")
+                           onvalue=True, 
+                           offvalue=False)
 checkbox_cookie.grid(row = 6, column = 2, sticky = 'e', ipadx = 10)
 
 frame1.grid_rowconfigure(7,pad=100)
@@ -177,8 +200,27 @@ bouton_conn_bd = ctk.CTkButton(frame1,
                                                 fg_color= "green",
                                                 hover_color= '#00FF00',
                                                 border_width=1,
-                                                corner_radius=0)
+                                                corner_radius=0,
+                                                command=envoyer_info)
 bouton_conn_bd.place(x=350, y=400, anchor='center')
+
+
+frame2.grid_rowconfigure(0,pad=50)
+frame2.columnconfigure((0,1,2,3,4,5), weight=1)
+bouton_voir_bd = ctk.CTkButton(frame2,
+                               text='Voir les données',
+                                   font=('Arial', 12, 'bold'),
+                                          text_color='orange',
+                                                height=30,
+                                                width=50,
+                                                border_color='orange',
+                                                fg_color= "green",
+                                                hover_color= '#00FF00',
+                                                border_width=1,
+                                                corner_radius=0,
+                                                command=recup_info)
+
+bouton_voir_bd.grid(row = 0, column = 0, sticky = 'w')
 
 
 
@@ -191,3 +233,4 @@ bouton_conn_bd.place(x=350, y=400, anchor='center')
 
 
 fenetre.mainloop()
+bdd.deconnexion_bdd() #On se déconnecte de la base de données

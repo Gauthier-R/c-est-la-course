@@ -2,14 +2,14 @@ import customtkinter
 
 app = customtkinter.CTk()
 
-def checkbox_event():
-    print("checkbox toggled, current value:", check_var.get())
+def segmented_button_callback(value):
+    print("segmented button clicked:", value)
 
-check_var = customtkinter.StringVar(value="on")
-checkbox = customtkinter.CTkCheckBox(app, text="CTkCheckBox", command=checkbox_event,
-                                     variable=check_var, onvalue="on", offvalue="off")
+segemented_button = customtkinter.CTkSegmentedButton(app, values=["Value 1", "Value 2", "Value 3"],
+                                                     command=segmented_button_callback)
+segemented_button.set("Value 1")
 
-checkbox.pack()
+segemented_button.pack()
 
 app.mainloop()
 
