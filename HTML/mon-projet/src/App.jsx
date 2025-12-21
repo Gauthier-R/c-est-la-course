@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { 
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, AreaChart, Area,
-  LineChart, Line, Treemap, ComposedChart, ReferenceLine
+  LineChart, Line, Treemap, ComposedChart, ReferenceLine, Sector
 } from 'recharts';
 import { 
   LayoutDashboard, Wallet, ArrowRightLeft, TrendingUp, PieChart as PieIcon,
@@ -11,7 +11,8 @@ import {
   Bot, Loader2, Calendar, X, Eye, EyeOff, ShieldCheck, Activity,
   ChevronLeft, History, List, Save, Grid, Circle, TrendingDown, Edit,
   LogOut, User, Lock, Mail, AlertCircle, ArrowRight, Cloud,
-  Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock
+  Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
+  Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -71,6 +72,18 @@ const COLORS = {
   epargne_salariale: '#06b6d4', // cyan-500
   crypto: '#8b5cf6', // violet-500
   autre: '#64748b' // slate-500
+};
+
+// Nouvelle palette pour les dépenses
+const EXPENSE_CATEGORIES = {
+  'Alimentation': { color: '#f59e0b', icon: Utensils },      // Amber
+  'Logement': { color: '#3b82f6', icon: Home },              // Blue
+  'Transport': { color: '#ef4444', icon: Car },              // Red
+  'Loisirs': { color: '#8b5cf6', icon: Gamepad2 },           // Purple
+  'Santé': { color: '#10b981', icon: Heart },                // Emerald
+  'Shopping': { color: '#ec4899', icon: ShoppingBag },       // Pink
+  'Services': { color: '#6366f1', icon: Zap },               // Indigo
+  'Autre': { color: '#94a3b8', icon: Circle }                // Slate
 };
 
 const CATEGORY_LABELS = {
@@ -141,11 +154,12 @@ const processFlowData = (timeRange, transactions) => {
     const monthName = date.toLocaleDateString('fr-FR', { month: 'short', year: i > 12 ? '2-digit' : undefined });
     const monthTrans = safeTransactions.filter(t => t.date.startsWith(monthKey));
     
+    // On exclut les transferts des calculs de revenus/dépenses car ce sont des mouvements neutres
     const revenus = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const depenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const solde = revenus - depenses;
 
-    data.push({ month: monthName, revenus, depenses, solde });
+    data.push({ month: monthName, rawDate: monthKey, revenus, depenses, solde });
   }
   return data;
 };
@@ -320,6 +334,219 @@ const EmptyState = ({ title, description, actionLabel, onAction, icon: Icon }) =
     {actionLabel && <Button onClick={onAction}>{actionLabel}</Button>}
   </div>
 );
+
+// --- COMPOSANTS CHART INTERACTIF ---
+const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => {
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  const handleExpenseBarClick = (data) => {
+    // SECURITY & DEBUGGING: Log to confirm click is received by the bar
+    console.log("Bar click - Data received:", data);
+    
+    // In Recharts Bar onClick, 'data' itself usually contains the payload or IS the payload mixed with other props.
+    // 'data.payload' is the standard way to access the original data object provided to the chart.
+    if (data && data.payload) {
+      setSelectedMonth(data.payload);
+      setActiveIndex(-1); // Reset hover state on new selection
+    } else {
+        console.warn("Click detected on bar but no payload found.", data);
+    }
+  };
+
+  const onPieEnter = useCallback((_, index) => {
+    setActiveIndex(index);
+  }, []);
+
+  const onPieLeave = useCallback(() => {
+    setActiveIndex(-1);
+  }, []);
+
+  const getPieDataForMonth = () => {
+    if (!selectedMonth || !transactions) return [];
+    
+    // Filter transactions for the selected month
+    const monthKey = selectedMonth.rawDate; // Expected YYYY-MM
+    const monthTransactions = transactions.filter(t => 
+      t.date.startsWith(monthKey) && t.type === 'expense'
+    );
+
+    // Group by category
+    const categoryTotals = {};
+    monthTransactions.forEach(t => {
+      const cat = t.category || 'Autre';
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
+    });
+
+    return Object.keys(categoryTotals).map(cat => ({
+      name: cat,
+      value: categoryTotals[cat]
+    })).sort((a,b) => b.value - a.value);
+  };
+
+  const pieData = useMemo(() => getPieDataForMonth(), [selectedMonth, transactions]);
+  const totalExpenses = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData]);
+
+  // Determine what to display in the center
+  const activeItem = activeIndex !== -1 ? pieData[activeIndex] : null;
+  const centerLabel = activeItem ? activeItem.name : "Dépensé";
+  const centerValue = activeItem ? activeItem.value : totalExpenses;
+  const centerColor = activeItem && EXPENSE_CATEGORIES[activeItem.name] ? EXPENSE_CATEGORIES[activeItem.name].color : '#1e293b'; // slate-800
+  const centerSubLabel = activeItem 
+    ? `${((activeItem.value / totalExpenses) * 100).toFixed(1)}%` 
+    : "Total";
+
+  // Memoized label renderer for performance
+  const renderCustomizedLabel = useCallback(({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, payload }) => {
+    const RADIAN = Math.PI / 180;
+    // Position icon in the middle of the slice band
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    
+    const CategoryIcon = EXPENSE_CATEGORIES[payload.name]?.icon || Circle;
+
+    // Only show icon if slice is big enough (> 2%)
+    if (percent < 0.02) return null;
+
+    return (
+      <g pointerEvents="none">
+        <foreignObject x={x - 12} y={y - 12} width={24} height={24}>
+          <div className="flex items-center justify-center w-full h-full text-white drop-shadow-md">
+             <CategoryIcon size={16} strokeWidth={2.5} />
+          </div>
+        </foreignObject>
+      </g>
+    );
+  }, []);
+
+  return (
+    <div className="h-96 w-full relative transition-all duration-300 flex flex-col min-h-[384px] min-w-[300px]"> {/* Added explicit min-height and min-width */}
+      {!hasFlowData && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
+          <p className="text-slate-400 text-sm font-medium">Aucune donnée</p>
+        </div>
+      )}
+
+      {selectedMonth ? (
+        <div className="h-full w-full flex flex-col animate-in fade-in zoom-in-95 duration-200">
+           <div className="flex justify-between items-center mb-1 px-2">
+             <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setSelectedMonth(null)} 
+                  className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                  title="Retour au graphique global"
+                >
+                  <ChevronLeft size={24}/>
+                </button>
+                <div>
+                    <h4 className="font-bold text-slate-800 text-lg leading-tight">
+                        {selectedMonth.month} {selectedMonth.rawDate?.split('-')[0] /* GUARD ADDED */}
+                    </h4>
+                    <p className="text-xs text-slate-500">Détail des dépenses</p>
+                </div>
+             </div>
+           </div>
+           
+           <div className="flex-1 relative min-h-[220px]">
+             {pieData.length === 0 ? (
+               <div className="flex items-center justify-center h-full text-slate-400 text-sm">Aucune dépense ce mois-ci</div>
+             ) : (
+               <ResponsiveContainer width="100%" height="100%">
+                 <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80} 
+                      outerRadius={120}
+                      paddingAngle={4}
+                      dataKey="value"
+                      label={renderCustomizedLabel}
+                      labelLine={false}
+                      onMouseEnter={onPieEnter}
+                      onMouseLeave={onPieLeave}
+                      animationDuration={800} 
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={EXPENSE_CATEGORIES[entry.name]?.color || EXPENSE_CATEGORIES['Autre'].color} 
+                          stroke="none"
+                          opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.3} 
+                          style={{ transition: 'opacity 0.2s ease', outline: 'none' }}
+                        />
+                      ))}
+                    </Pie>
+                 </PieChart>
+               </ResponsiveContainer>
+             )}
+              
+              {/* Dynamic Center Text Overlay */}
+              {pieData.length > 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0" style={{top: '0'}}>
+                  <span className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">{centerSubLabel}</span>
+                  <span className="text-3xl font-extrabold transition-colors duration-200" style={{ color: centerColor }}>
+                    {centerValue.toLocaleString()} €
+                  </span>
+                  <span className="text-sm font-bold text-slate-600 mt-1 px-3 py-1 rounded-full bg-slate-50 border border-slate-100 shadow-sm">
+                    {centerLabel}
+                  </span>
+                </div>
+              )}
+           </div>
+           
+           {/* Compact Legend for clarity on small items */}
+           <div className="mt-4 flex flex-wrap justify-center gap-2 px-2 overflow-y-auto max-h-[80px]">
+              {pieData.map((entry, index) => {
+                  const CatIcon = EXPENSE_CATEGORIES[entry.name]?.icon || Circle;
+                  const color = EXPENSE_CATEGORIES[entry.name]?.color || '#94a3b8'; // Safe color fallback
+                  const isHovered = activeIndex === index;
+                  return (
+                    <div 
+                        key={entry.name} 
+                        onMouseEnter={() => onPieEnter(null, index)}
+                        onMouseLeave={onPieLeave}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer ${isHovered ? 'bg-slate-100 border-slate-300 scale-105' : 'bg-white border-slate-100'}`}
+                    >
+                        <div className="p-1 rounded-full" style={{ backgroundColor: color + '20', color: color }}>
+                            <CatIcon size={10} />
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-700">{entry.name}</span>
+                        <span className="text-[10px] text-slate-500">{totalExpenses > 0 ? Math.round((entry.value / totalExpenses) * 100) : 0}%</span>
+                    </div>
+                  );
+              })}
+           </div>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={cashflowData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+            <RechartsTooltip 
+                cursor={{fill: '#f1f5f9'}} 
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                wrapperStyle={{ pointerEvents: 'none' }} // Fix: Ensure click passes through tooltip
+            />
+            <Bar dataKey="revenus" name="Revenus" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={16} />
+            <Bar 
+              dataKey="depenses" 
+              name="Dépenses (cliquez-moi)" 
+              fill="#ef4444" 
+              radius={[4, 4, 0, 0]} 
+              barSize={16} 
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={handleExpenseBarClick} // MOVED HERE: Specific handler for the expenses bar
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+};
+
 
 // --- COMPOSANTS VUES & DETAILS ---
 
@@ -519,12 +746,12 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="space-y-6">
                     {isComposite ? (
-                       <Card className="p-6 h-fit bg-indigo-50 border-indigo-100">
-                         <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
-                         <p className="text-sm text-indigo-800 leading-relaxed">
-                           L'historique de ce compte est calculé automatiquement en additionnant l'historique de chaque ligne (actions, fonds, espèces).
-                         </p>
-                       </Card>
+                        <Card className="p-6 h-fit bg-indigo-50 border-indigo-100">
+                          <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
+                          <p className="text-sm text-indigo-800 leading-relaxed">
+                            L'historique de ce compte est calculé automatiquement en additionnant l'historique de chaque ligne (actions, fonds, espèces).
+                          </p>
+                        </Card>
                     ) : (
                       <Card className="p-6 h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button className="w-full">Valider</Button></form></Card>
                     )}
@@ -670,7 +897,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${netWorth.toLocaleString()} €`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${investments.toLocaleString()} €`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${liquidities.toLocaleString()} €`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <Card className="p-6 lg:col-span-2 flex flex-col border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingUp size={20} className="text-blue-600"/> Évolution</h3><div className="bg-slate-100 p-0.5 rounded-lg flex items-center"><button onClick={() => setViewMode('net')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'net' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Net</button><button onClick={() => setViewMode('brut')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'brut' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Brut</button></div></div>
-        <div className="h-72 w-full">
+        <div className="h-72 w-full min-h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={evolutionData}>
               <defs>
@@ -709,20 +936,23 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
           </ResponsiveContainer>
         </div>
         </Card>
-        <Card className="p-6 border-slate-300 flex flex-col justify-center relative"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3><div className="h-64 w-full relative mt-4"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}</Pie><RechartsTooltip /><Legend content={renderLegend} verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}><span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span><span className="text-xs text-slate-500">Total</span></div></div></Card>
+        <Card className="p-6 border-slate-300 flex flex-col justify-center relative"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3><div className="h-64 w-full relative mt-4 min-h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}</Pie><RechartsTooltip /><Legend content={renderLegend} verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}><span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span><span className="text-xs text-slate-500">Total</span></div></div></Card>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card className="p-6 relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Revenus & Dépenses</h3><Button variant="magic" onClick={handleForecast} disabled={isForecasting} className="text-xs px-2 py-1 h-8">{isForecasting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />} Prévision</Button></div>{forecast && <div className="absolute top-16 left-6 right-6 z-20 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-indigo-100 shadow-lg"><div className="flex justify-between"><h4 className="font-bold text-indigo-900">Prévision IA</h4><button onClick={() => setForecast(null)}><X size={16}/></button></div><div className="grid grid-cols-3 gap-4 mb-3 text-center"><div className="p-2 bg-green-50 rounded-lg"><p className="text-xs text-green-700">Revenus</p><p className="font-bold">{forecast.revenus}€</p></div><div className="p-2 bg-red-50 rounded-lg"><p className="text-xs text-red-700">Dépenses</p><p className="font-bold">{forecast.depenses}€</p></div></div><p className="text-xs text-slate-600 italic">{forecast.conseil}</p></div>}
-        <div className="h-64 w-full relative">
-          {!hasFlowData && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
-              <p className="text-slate-400 text-sm font-medium">Aucun revenu et dépense</p>
+        <Card className="p-6 relative border-slate-300">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Revenus & Dépenses</h3>
+                <Button variant="magic" onClick={handleForecast} disabled={isForecasting} className="text-xs px-2 py-1 h-8">{isForecasting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />} Prévision</Button>
             </div>
-          )}
-          <ResponsiveContainer width="100%" height="100%"><ComposedChart data={cashflowHistoryData}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><Bar dataKey="revenus" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={12} /><Bar dataKey="depenses" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={12} /></ComposedChart></ResponsiveContainer>
-        </div>
+            {forecast && <div className="absolute top-16 left-6 right-6 z-20 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-indigo-100 shadow-lg"><div className="flex justify-between"><h4 className="font-bold text-indigo-900">Prévision IA</h4><button onClick={() => setForecast(null)}><X size={16}/></button></div><div className="grid grid-cols-3 gap-4 mb-3 text-center"><div className="p-2 bg-green-50 rounded-lg"><p className="text-xs text-green-700">Revenus</p><p className="font-bold">{forecast.revenus}€</p></div><div className="p-2 bg-red-50 rounded-lg"><p className="text-xs text-red-700">Dépenses</p><p className="font-bold">{forecast.depenses}€</p></div></div><p className="text-xs text-slate-600 italic">{forecast.conseil}</p></div>}
+            
+            <InteractiveBudgetChart 
+                cashflowData={cashflowHistoryData} 
+                transactions={transactions} 
+                hasFlowData={hasFlowData} 
+            />
         </Card>
-        <Card className="p-6 flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (<div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></div></Card>
+        <Card className="p-6 flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (<div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></div></Card>
       </div>
     </div>
   );
@@ -772,32 +1002,72 @@ const AssetsView = ({ assets, setAssets }) => {
   );
 };
 
-const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransaction }) => {
+const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransaction, onUpdateTransaction }) => {
   const [newTrans, setNewTrans] = useState({ date: new Date().toISOString().split('T')[0], label: '', amount: '', type: 'expense', category: 'Autre' });
   const [selectedAccount, setSelectedAccount] = useState('');
+  const [transferTo, setTransferTo] = useState('');
   const [aiInput, setAiInput] = useState('');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [timeRange, setTimeRange] = useState('6M');
 
+  const cashflowHistoryData = useMemo(() => processFlowData(timeRange, transactions), [timeRange, transactions]);
   const liquidAssets = useMemo(() => assets ? assets.filter(a => a.type === 'liquidite') : [], [assets]);
+  const hasFlowData = useMemo(() => cashflowHistoryData.some(d => d.revenus > 0 || d.depenses > 0), [cashflowHistoryData]);
 
   const handleAdd = (e) => {
     e.preventDefault();
     if (!newTrans.label || !newTrans.amount) return;
     
-    // Ensure date is set
     const finalDate = newTrans.date ? newTrans.date : new Date().toISOString().split('T')[0];
 
     const transaction = { 
       ...newTrans, 
-      date: finalDate, // Use the ensured date
-      id: Date.now(), 
+      date: finalDate, 
+      id: editId || Date.now(), 
       amount: parseFloat(newTrans.amount) 
     };
 
-    onAddTransaction(transaction, selectedAccount);
-    setNewTrans({ ...newTrans, label: '', amount: '' });
+    if (newTrans.type === 'transfer') {
+      transaction.fromId = selectedAccount;
+      transaction.toId = transferTo;
+      if (!transaction.fromId || !transaction.toId || transaction.fromId === transaction.toId) return;
+    } else {
+      // FIX: Ensure linkedAssetId is included for non-transfer updates
+      transaction.linkedAssetId = selectedAccount;
+    }
+
+    if (editId) {
+        onUpdateTransaction(transaction);
+        setEditId(null);
+    } else {
+        onAddTransaction(transaction, selectedAccount);
+    }
+    
+    setNewTrans({ date: new Date().toISOString().split('T')[0], label: '', amount: '', type: 'expense', category: 'Autre' });
     setSelectedAccount('');
+    setTransferTo('');
+  };
+
+  const startEdit = (t) => {
+      setEditId(t.id);
+      setNewTrans({ date: t.date, label: t.label, amount: t.amount, type: t.type, category: t.category });
+      if (t.type === 'transfer') {
+          setSelectedAccount(t.fromId || '');
+          setTransferTo(t.toId || '');
+      } else {
+          setSelectedAccount(t.linkedAssetId || '');
+          setTransferTo('');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+      setEditId(null);
+      setNewTrans({ date: new Date().toISOString().split('T')[0], label: '', amount: '', type: 'expense', category: 'Autre' });
+      setSelectedAccount('');
+      setTransferTo('');
   };
 
   const handleAiParse = async () => {
@@ -808,33 +1078,100 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       Comptes disponibles : ${accountNames}.
       Analyse : "${aiInput}". 
       Date de référence (aujourd'hui) : ${new Date().toLocaleDateString('fr-FR')}. 
+      Catégories possibles : ${Object.keys(EXPENSE_CATEGORIES).join(', ')}.
       Instructions :
       - Extrais la date mentionnée (hier, demain, le 25...) au format YYYY-MM-DD.
       - Si aucune date n'est mentionnée, utilise la date de référence.
-      - Extrais : label, amount (number), type (expense/income), category, date, accountName.
+      - Extrais : label, amount (number), type (expense/income/transfer), category, date.
+      - Pour la catégorie, choisis la plus pertinente parmi la liste des catégories possibles. Si aucune ne correspond parfaitement, mets 'Autre'.
+      - Si c'est un virement/transfert, extrais 'accountFrom' (compte source) et 'accountTo' (compte destination) à partir des comptes disponibles.
+      - Si c'est une dépense ou un revenu, extrais 'accountName'.
     `;
     try {
       const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
       const data = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim());
-      setNewTrans({ date: data.date || new Date().toISOString().split('T')[0], label: data.label || '', amount: data.amount || '', type: data.type || 'expense', category: data.category || 'Autre' });
-      if (data.accountName) {
-        const found = liquidAssets.find(a => a.name.toLowerCase() === data.accountName.toLowerCase());
-        if (found) setSelectedAccount(found.id);
+      setNewTrans({ 
+        date: data.date || new Date().toISOString().split('T')[0], 
+        label: data.label || '', 
+        amount: data.amount || '', 
+        type: data.type || 'expense', 
+        category: data.category || 'Autre' 
+      });
+      
+      if (data.type === 'transfer') {
+        if (data.accountFrom) {
+          const foundFrom = liquidAssets.find(a => a.name.toLowerCase() === data.accountFrom.toLowerCase());
+          if (foundFrom) setSelectedAccount(foundFrom.id);
+        }
+        if (data.accountTo) {
+          const foundTo = liquidAssets.find(a => a.name.toLowerCase() === data.accountTo.toLowerCase());
+          if (foundTo) setTransferTo(foundTo.id);
+        }
+      } else {
+        if (data.accountName) {
+          const found = liquidAssets.find(a => a.name.toLowerCase() === data.accountName.toLowerCase());
+          if (found) setSelectedAccount(found.id);
+        }
       }
       setAiInput('');
-    } catch (e) { alert("Erreur IA"); } finally { setIsAiProcessing(false); }
+    } catch (e) { alert("Erreur IA: " + e.message); } finally { setIsAiProcessing(false); }
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right duration-300 text-slate-900">
       <div className="lg:col-span-1 space-y-6">
-        {/* STYLE MODIFIÉ: Fond et bordure */}
-        <Card className="p-6 bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Courses 50€ hier avec Livret A"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
-        <Card className="p-6 sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} /> Nouvelle Opération</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-sm font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-sm font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button></div></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Compte (Optionnel)</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.amount} onChange={(e) => setNewTrans({...newTrans, amount: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Libellé</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.label} onChange={(e) => setNewTrans({...newTrans, label: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.date} onChange={(e) => setNewTrans({...newTrans, date: e.target.value})} /></div><Button className="w-full">Enregistrer</Button></form></Card>
+        <Card className="p-6 bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
+        <Card className="p-6 sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
+        
+        <div><label className="block text-xs font-semibold text-slate-600 mb-1">{newTrans.type === 'transfer' ? "Compte Débité (Source)" : "Compte (Optionnel)"}</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        
+        {newTrans.type === 'transfer' && (
+          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Compte Crédité (Destination)</label><select className="w-full p-2 rounded-lg border border-slate-300" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.filter(a => a.id != selectedAccount).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        )}
+        
+        <div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.amount} onChange={(e) => setNewTrans({...newTrans, amount: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Libellé</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.label} onChange={(e) => setNewTrans({...newTrans, label: e.target.value})} /></div>
+        
+        {/* CATEGORY SELECTOR FOR EXPENSES */}
+        {newTrans.type === 'expense' && (
+            <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Catégorie</label>
+                <select 
+                    className="w-full p-2 rounded-lg border border-slate-300" 
+                    value={newTrans.category || 'Autre'} 
+                    onChange={(e) => setNewTrans({...newTrans, category: e.target.value})}
+                >
+                    {Object.keys(EXPENSE_CATEGORIES).map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                </select>
+            </div>
+        )}
+        
+        <div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.date} onChange={(e) => setNewTrans({...newTrans, date: e.target.value})} /></div>
+        <div className="flex gap-2">
+            {editId && <Button type="button" variant="secondary" className="flex-1" onClick={cancelEdit}>Annuler</Button>}
+            <Button className="flex-1">{editId ? "Modifier" : "Enregistrer"}</Button>
+        </div>
+        </form></Card>
       </div>
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 space-y-6">
         <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
-        <Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique</h3></div><div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">{transactions.map(t => (<div key={t.id} className="p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></Card>
+        
+        <Card className="p-6 relative border-slate-200">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Analyse des Flux</h3>
+             <InteractiveBudgetChart 
+                cashflowData={cashflowHistoryData} 
+                transactions={transactions} 
+                hasFlowData={hasFlowData} 
+            />
+        </Card>
+
+        <Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique</h3></div><div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">{transactions.map(t => (<div key={t.id} className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => startEdit(t)} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Modifier"><Edit size={16} /></button>
+            <button onClick={() => setTransactionToDelete(t.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
+        </div>
+        </div></div>))}</div></Card>
       </div>
     </div>
   );
@@ -982,6 +1319,40 @@ export default function App() {
   };
 
   const handleCreateTransaction = (transaction, impactedAssetId) => {
+    if (transaction.type === 'transfer') {
+        const newTransaction = { ...transaction };
+        const newTransactions = [newTransaction, ...transactions];
+        setTransactions(newTransactions); saveTransactions(newTransactions);
+
+        let currentAssets = [...assets];
+        
+        // 1. Source Update (Decrement)
+        if (transaction.fromId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.fromId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = -transaction.amount;
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        
+        // 2. Dest Update (Increment)
+        if (transaction.toId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.toId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = transaction.amount;
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        
+        setAssets(currentAssets);
+        saveAssets(currentAssets);
+        return;
+    }
+
     const newTransaction = { ...transaction, linkedAssetId: impactedAssetId };
     const newTransactions = [newTransaction, ...transactions];
     setTransactions(newTransactions); saveTransactions(newTransactions);
@@ -1000,11 +1371,115 @@ export default function App() {
     }
   };
 
+  const handleUpdateTransaction = (updatedTransaction) => {
+    const originalTransaction = transactions.find(t => t.id === updatedTransaction.id);
+    if (!originalTransaction) return;
+
+    let currentAssets = [...assets];
+
+    // 1. REVERT ORIGINAL IMPACT
+    if (originalTransaction.type === 'transfer') {
+        if (originalTransaction.fromId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.fromId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = originalTransaction.amount; // Add back
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        if (originalTransaction.toId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.toId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = -originalTransaction.amount; // Remove
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+    } else if (originalTransaction.linkedAssetId) {
+        const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.linkedAssetId.toString());
+        if (idx !== -1) {
+            const asset = currentAssets[idx];
+            let reverseDelta = originalTransaction.type === 'expense' ? originalTransaction.amount : -originalTransaction.amount;
+            const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, reverseDelta);
+            currentAssets[idx] = { ...asset, value: asset.value + reverseDelta, history: updatedHistory };
+        }
+    }
+
+    // 2. APPLY NEW IMPACT
+    if (updatedTransaction.type === 'transfer') {
+        if (updatedTransaction.fromId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.fromId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = -updatedTransaction.amount; // Deduct
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        if (updatedTransaction.toId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.toId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = updatedTransaction.amount; // Add
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+    } else if (updatedTransaction.linkedAssetId) {
+        const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.linkedAssetId.toString());
+        if (idx !== -1) {
+            const asset = currentAssets[idx];
+            let delta = updatedTransaction.type === 'expense' ? -updatedTransaction.amount : updatedTransaction.amount;
+            const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
+            currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+        }
+    }
+
+    setAssets(currentAssets);
+    saveAssets(currentAssets);
+
+    const newTransactionsList = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
+    setTransactions(newTransactionsList);
+    saveTransactions(newTransactionsList);
+  };
+
   const handleDeleteTransaction = (transactionId) => {
     const transaction = transactions.find(t => t.id === transactionId);
     if (!transaction) return;
     const newTransactions = transactions.filter(t => t.id !== transactionId);
     setTransactions(newTransactions); saveTransactions(newTransactions);
+
+    if (transaction.type === 'transfer') {
+        let currentAssets = [...assets];
+        
+        // Reverse Source (Increment)
+        if (transaction.fromId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.fromId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = transaction.amount; // Add back
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        
+        // Reverse Dest (Decrement)
+        if (transaction.toId) {
+             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.toId.toString());
+             if (idx !== -1) {
+                 const asset = currentAssets[idx];
+                 const delta = -transaction.amount; // Remove
+                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
+                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
+             }
+        }
+        
+        setAssets(currentAssets);
+        saveAssets(currentAssets);
+        return;
+    }
 
     if (transaction.linkedAssetId) {
        const assetIndex = assets.findIndex(a => a.id.toString() === transaction.linkedAssetId.toString());
@@ -1047,6 +1522,7 @@ export default function App() {
             assets={assets} 
             onAddTransaction={handleCreateTransaction} 
             onDeleteTransaction={handleDeleteTransaction} 
+            onUpdateTransaction={handleUpdateTransaction}
           />
         )}
         {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} />}
