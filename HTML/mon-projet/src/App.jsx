@@ -12,7 +12,8 @@ import {
   ChevronLeft, History, List, Save, Grid, Circle, TrendingDown, Edit,
   LogOut, User, Lock, Mail, AlertCircle, ArrowRight, Cloud,
   Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
-  Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase
+  Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase,
+  CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -24,12 +25,17 @@ import {
   onAuthStateChanged, 
   signOut,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect, 
+  sendPasswordResetEmail,
+  updateProfile
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
 
 // --- API CONFIGURATION ---
-const apiKey = "AIzaSyDuK4W2XpPxDGjMCxeiEDiAUi11w7KV8B0";
+const apiKey = "AIzaSyDuK4W2XpPxDGjMCxeiEDiAUi11w7KV8B0"; // Laisser vide, injecté par l'environnement
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -50,18 +56,11 @@ try {
   // Ignore
 }
 
-let analytics;
-if (typeof window !== 'undefined' && app) {
-  try {
-    analytics = getAnalytics(app);
-  } catch (e) {
-    console.warn("Analytics not initialized");
-  }
-}
-
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'my-wealth-app'; 
+
+// Utilisation de l'ID dynamique pour garantir l'accès aux bonnes données
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'my-wealth-app-default';
 
 // --- CONFIGURATION & UTILS ---
 
@@ -76,7 +75,7 @@ const COLORS = {
 
 // Nouvelle palette pour les dépenses
 const EXPENSE_CATEGORIES = {
-  'Alimentation': { color: '#f59e0b', icon: Utensils },      // Amber
+  'Alimentation': { color: '#f59e0b', icon: Utensils },       // Amber
   'Logement': { color: '#3b82f6', icon: Home },              // Blue
   'Transport': { color: '#ef4444', icon: Car },              // Red
   'Loisirs': { color: '#8b5cf6', icon: Gamepad2 },           // Purple
@@ -164,16 +163,6 @@ const processFlowData = (timeRange, transactions) => {
   return data;
 };
 
-// Helper for formatting wealth in pie chart center
-const formatWealth = (value) => {
-  if (value >= 1000000) {
-    return (value / 1000000).toFixed(2) + ' M€';
-  } else if (value >= 10000) {
-      return (value / 1000).toFixed(0) + ' k€';
-  }
-  return value.toLocaleString() + ' €';
-};
-
 // --- API HELPER ---
 async function callGeminiAPI(systemPrompt, userPrompt) {
   try {
@@ -194,7 +183,7 @@ async function callGeminiAPI(systemPrompt, userPrompt) {
     return data.candidates?.[0]?.content?.parts?.[0]?.text || "Désolé, je n'ai pas pu analyser les données.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Une erreur est survenue avec l'assistant.";
+    return "Une erreur est survenue avec l'assistant. Vérifiez la clé API.";
   }
 }
 
@@ -214,6 +203,115 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message }) => {
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100 font-medium transition-colors text-sm">Annuler</button>
           <button onClick={() => { onConfirm(); onClose(); }} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-colors shadow-sm text-sm">Oui, supprimer</button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    birthDate: '',
+    monthlyIncome: '',
+    financialGoal: 'freedom',
+    riskProfile: 'balanced'
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && userProfile) {
+      setFormData({
+        firstName: userProfile.firstName || '',
+        lastName: userProfile.lastName || '',
+        birthDate: userProfile.birthDate || '',
+        monthlyIncome: userProfile.monthlyIncome || '',
+        financialGoal: userProfile.financialGoal || 'freedom',
+        riskProfile: userProfile.riskProfile || 'balanced'
+      });
+    }
+  }, [isOpen, userProfile]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    await onUpdate(formData);
+    setLoading(false);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full border border-slate-100 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Modifier mon profil</h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full"><X size={20}/></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Prénom</label>
+                    <input type="text" name="firstName" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.firstName} onChange={handleChange} required />
+                </div>
+                <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label>
+                    <input type="text" name="lastName" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.lastName} onChange={handleChange} required />
+                </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2"><Activity size={16}/> Données Financières</h4>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Date de naissance</label>
+                        <input type="date" name="birthDate" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.birthDate} onChange={handleChange} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Revenu Mensuel Net (€)</label>
+                        <input type="number" name="monthlyIncome" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex: 2500" value={formData.monthlyIncome} onChange={handleChange} />
+                    </div>
+                </div>
+                
+                <div className="mb-4">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Objectif Principal</label>
+                    <div className="relative">
+                        <Target size={16} className="absolute left-3 top-3 text-slate-400" />
+                        <select name="financialGoal" className="w-full p-2.5 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white" value={formData.financialGoal} onChange={handleChange}>
+                            <option value="freedom">Liberté Financière / FIRE</option>
+                            <option value="retirement">Préparer sa retraite</option>
+                            <option value="real_estate">Achat Immobilier</option>
+                            <option value="safety">Épargne de précaution</option>
+                            <option value="growth">Croissance du capital</option>
+                            <option value="other">Autre</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Profil de Risque</label>
+                    <div className="relative">
+                        <Scale size={16} className="absolute left-3 top-3 text-slate-400" />
+                        <select name="riskProfile" className="w-full p-2.5 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white" value={formData.riskProfile} onChange={handleChange}>
+                            <option value="prudent">Prudent (Sécurité avant tout)</option>
+                            <option value="balanced">Équilibré (Risque modéré)</option>
+                            <option value="dynamic">Dynamique (Performance max)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-8 border-t border-slate-100 pt-4">
+                <Button variant="secondary" onClick={onClose} type="button">Annuler</Button>
+                <Button type="submit" disabled={loading}>{loading ? <Loader2 className="animate-spin" size={18}/> : "Enregistrer les modifications"}</Button>
+            </div>
+        </form>
       </div>
     </div>
   );
@@ -248,7 +346,7 @@ const Card = ({ children, className = "" }) => (
   </div>
 );
 
-const Button = ({ onClick, children, variant = "primary", className = "", disabled = false }) => {
+const Button = ({ onClick, children, variant = "primary", className = "", disabled = false, type="button" }) => {
   const baseStyle = "px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 justify-center";
   const variants = {
     primary: "bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300",
@@ -256,10 +354,11 @@ const Button = ({ onClick, children, variant = "primary", className = "", disabl
     danger: "text-red-600 hover:bg-red-50",
     magic: "bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:opacity-90 shadow-md",
     ghost: "bg-transparent text-slate-500 hover:bg-slate-100",
-    icon: "p-2 hover:bg-slate-100 rounded-full"
+    icon: "p-2 hover:bg-slate-100 rounded-full",
+    google: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
   };
   return (
-    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+    <button onClick={onClick} type={type} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
       {children}
     </button>
   );
@@ -335,80 +434,49 @@ const EmptyState = ({ title, description, actionLabel, onAction, icon: Icon }) =
   </div>
 );
 
-// --- COMPOSANTS CHART INTERACTIF ---
+// --- INTERACTIVE CHART COMPONENT ---
 const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const handleExpenseBarClick = (data) => {
-    // SECURITY & DEBUGGING: Log to confirm click is received by the bar
-    console.log("Bar click - Data received:", data);
-    
-    // In Recharts Bar onClick, 'data' itself usually contains the payload or IS the payload mixed with other props.
-    // 'data.payload' is the standard way to access the original data object provided to the chart.
     if (data && data.payload) {
       setSelectedMonth(data.payload);
-      setActiveIndex(-1); // Reset hover state on new selection
-    } else {
-        console.warn("Click detected on bar but no payload found.", data);
+      setActiveIndex(-1);
     }
   };
 
-  const onPieEnter = useCallback((_, index) => {
-    setActiveIndex(index);
-  }, []);
+  const onPieEnter = useCallback((_, index) => setActiveIndex(index), []);
+  const onPieLeave = useCallback(() => setActiveIndex(-1), []);
 
-  const onPieLeave = useCallback(() => {
-    setActiveIndex(-1);
-  }, []);
-
-  const getPieDataForMonth = () => {
+  const pieData = useMemo(() => {
     if (!selectedMonth || !transactions) return [];
-    
-    // Filter transactions for the selected month
-    const monthKey = selectedMonth.rawDate; // Expected YYYY-MM
+    const monthKey = selectedMonth.rawDate;
     const monthTransactions = transactions.filter(t => 
       t.date.startsWith(monthKey) && t.type === 'expense'
     );
-
-    // Group by category
     const categoryTotals = {};
     monthTransactions.forEach(t => {
       const cat = t.category || 'Autre';
       categoryTotals[cat] = (categoryTotals[cat] || 0) + t.amount;
     });
+    return Object.keys(categoryTotals).map(cat => ({ name: cat, value: categoryTotals[cat] })).sort((a,b) => b.value - a.value);
+  }, [selectedMonth, transactions]);
 
-    return Object.keys(categoryTotals).map(cat => ({
-      name: cat,
-      value: categoryTotals[cat]
-    })).sort((a,b) => b.value - a.value);
-  };
-
-  const pieData = useMemo(() => getPieDataForMonth(), [selectedMonth, transactions]);
   const totalExpenses = useMemo(() => pieData.reduce((sum, item) => sum + item.value, 0), [pieData]);
-
-  // Determine what to display in the center
   const activeItem = activeIndex !== -1 ? pieData[activeIndex] : null;
   const centerLabel = activeItem ? activeItem.name : "Dépensé";
   const centerValue = activeItem ? activeItem.value : totalExpenses;
-  const centerColor = activeItem && EXPENSE_CATEGORIES[activeItem.name] ? EXPENSE_CATEGORIES[activeItem.name].color : '#1e293b'; // slate-800
-  const centerSubLabel = activeItem 
-    ? `${((activeItem.value / totalExpenses) * 100).toFixed(1)}%` 
-    : "Total";
+  const centerColor = activeItem && EXPENSE_CATEGORIES[activeItem.name] ? EXPENSE_CATEGORIES[activeItem.name].color : '#1e293b'; 
+  const centerSubLabel = activeItem ? `${((activeItem.value / totalExpenses) * 100).toFixed(1)}%` : "Total";
 
-  // Memoized label renderer for performance
   const renderCustomizedLabel = useCallback(({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, payload }) => {
     const RADIAN = Math.PI / 180;
-    // Position icon in the middle of the slice band
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    
     const CategoryIcon = EXPENSE_CATEGORIES[payload.name]?.icon || Circle;
-
-    // Only show icon if slice is big enough (> 2%)
     if (percent < 0.02) return null;
-
     return (
       <g pointerEvents="none">
         <foreignObject x={x - 12} y={y - 12} width={24} height={24}>
@@ -421,97 +489,55 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
   }, []);
 
   return (
-    <div className="h-96 w-full relative transition-all duration-300 flex flex-col min-h-[384px] min-w-[300px]"> {/* Added explicit min-height and min-width */}
+    <div className="h-96 w-full relative transition-all duration-300 flex flex-col min-h-[384px] min-w-[300px]">
       {!hasFlowData && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
           <p className="text-slate-400 text-sm font-medium">Aucune donnée</p>
         </div>
       )}
-
       {selectedMonth ? (
         <div className="h-full w-full flex flex-col animate-in fade-in zoom-in-95 duration-200">
            <div className="flex justify-between items-center mb-1 px-2">
              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setSelectedMonth(null)} 
-                  className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
-                  title="Retour au graphique global"
-                >
+                <button onClick={() => setSelectedMonth(null)} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" title="Retour au graphique global">
                   <ChevronLeft size={24}/>
                 </button>
                 <div>
-                    <h4 className="font-bold text-slate-800 text-lg leading-tight">
-                        {selectedMonth.month} {selectedMonth.rawDate?.split('-')[0] /* GUARD ADDED */}
-                    </h4>
+                    <h4 className="font-bold text-slate-800 text-lg leading-tight">{selectedMonth.month} {selectedMonth.rawDate?.split('-')[0]}</h4>
                     <p className="text-xs text-slate-500">Détail des dépenses</p>
                 </div>
              </div>
            </div>
-           
            <div className="flex-1 relative min-h-[220px]">
              {pieData.length === 0 ? (
                <div className="flex items-center justify-center h-full text-slate-400 text-sm">Aucune dépense ce mois-ci</div>
              ) : (
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80} 
-                      outerRadius={120}
-                      paddingAngle={4}
-                      dataKey="value"
-                      label={renderCustomizedLabel}
-                      labelLine={false}
-                      onMouseEnter={onPieEnter}
-                      onMouseLeave={onPieLeave}
-                      animationDuration={800} 
-                    >
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={4} dataKey="value" label={renderCustomizedLabel} labelLine={false} onMouseEnter={onPieEnter} onMouseLeave={onPieEnter} animationDuration={800}>
                       {pieData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={EXPENSE_CATEGORIES[entry.name]?.color || EXPENSE_CATEGORIES['Autre'].color} 
-                          stroke="none"
-                          opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.3} 
-                          style={{ transition: 'opacity 0.2s ease', outline: 'none' }}
-                        />
+                        <Cell key={`cell-${index}`} fill={EXPENSE_CATEGORIES[entry.name]?.color || EXPENSE_CATEGORIES['Autre'].color} stroke="none" opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.3} style={{ transition: 'opacity 0.2s ease', outline: 'none' }}/>
                       ))}
                     </Pie>
                  </PieChart>
                </ResponsiveContainer>
              )}
-              
-              {/* Dynamic Center Text Overlay */}
-              {pieData.length > 0 && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0" style={{top: '0'}}>
-                  <span className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">{centerSubLabel}</span>
-                  <span className="text-3xl font-extrabold transition-colors duration-200" style={{ color: centerColor }}>
-                    {centerValue.toLocaleString()} €
-                  </span>
-                  <span className="text-sm font-bold text-slate-600 mt-1 px-3 py-1 rounded-full bg-slate-50 border border-slate-100 shadow-sm">
-                    {centerLabel}
-                  </span>
-                </div>
-              )}
+             {pieData.length > 0 && (
+               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0" style={{top: '0'}}>
+                 <span className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">{centerSubLabel}</span>
+                 <span className="text-3xl font-extrabold transition-colors duration-200" style={{ color: centerColor }}>{centerValue.toLocaleString()} €</span>
+                 <span className="text-sm font-bold text-slate-600 mt-1 px-3 py-1 rounded-full bg-slate-50 border border-slate-100 shadow-sm">{centerLabel}</span>
+               </div>
+             )}
            </div>
-           
-           {/* Compact Legend for clarity on small items */}
            <div className="mt-4 flex flex-wrap justify-center gap-2 px-2 overflow-y-auto max-h-[80px]">
               {pieData.map((entry, index) => {
                   const CatIcon = EXPENSE_CATEGORIES[entry.name]?.icon || Circle;
-                  const color = EXPENSE_CATEGORIES[entry.name]?.color || '#94a3b8'; // Safe color fallback
+                  const color = EXPENSE_CATEGORIES[entry.name]?.color || '#94a3b8';
                   const isHovered = activeIndex === index;
                   return (
-                    <div 
-                        key={entry.name} 
-                        onMouseEnter={() => onPieEnter(null, index)}
-                        onMouseLeave={onPieLeave}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer ${isHovered ? 'bg-slate-100 border-slate-300 scale-105' : 'bg-white border-slate-100'}`}
-                    >
-                        <div className="p-1 rounded-full" style={{ backgroundColor: color + '20', color: color }}>
-                            <CatIcon size={10} />
-                        </div>
+                    <div key={entry.name} onMouseEnter={() => onPieEnter(null, index)} onMouseLeave={onPieLeave} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer ${isHovered ? 'bg-slate-100 border-slate-300 scale-105' : 'bg-white border-slate-100'}`}>
+                        <div className="p-1 rounded-full" style={{ backgroundColor: color + '20', color: color }}><CatIcon size={10} /></div>
                         <span className="text-[10px] font-semibold text-slate-700">{entry.name}</span>
                         <span className="text-[10px] text-slate-500">{totalExpenses > 0 ? Math.round((entry.value / totalExpenses) * 100) : 0}%</span>
                     </div>
@@ -525,21 +551,9 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
             <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-            <RechartsTooltip 
-                cursor={{fill: '#f1f5f9'}} 
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                wrapperStyle={{ pointerEvents: 'none' }} // Fix: Ensure click passes through tooltip
-            />
+            <RechartsTooltip cursor={{fill: '#f1f5f9'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} wrapperStyle={{ pointerEvents: 'none' }} />
             <Bar dataKey="revenus" name="Revenus" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={16} />
-            <Bar 
-              dataKey="depenses" 
-              name="Dépenses (cliquez-moi)" 
-              fill="#ef4444" 
-              radius={[4, 4, 0, 0]} 
-              barSize={16} 
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={handleExpenseBarClick} // MOVED HERE: Specific handler for the expenses bar
-            />
+            <Bar dataKey="depenses" name="Dépenses (cliquez-moi)" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={16} className="cursor-pointer hover:opacity-80 transition-opacity" onClick={handleExpenseBarClick} />
           </ComposedChart>
         </ResponsiveContainer>
       )}
@@ -724,7 +738,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <Card className="p-6 h-fit bg-slate-50/50 border-slate-200">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-blue-600"/> Ajouter une ligne</h3>
-                    <form onSubmit={handleAddPosition} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" placeholder="Ex: Air Liquide" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosition.value} onChange={(e) => setNewPosition({...newPosition, value: e.target.value})} /></div><Button className="w-full justify-center">Ajouter</Button></form>
+                    <form onSubmit={handleAddPosition} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" placeholder="Ex: Air Liquide" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosition.value} onChange={(e) => setNewPosition({...newPosition, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center">Ajouter</Button></form>
                   </Card>
                   <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200">
                     <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2">Lignes détenues</h3></div>
@@ -753,10 +767,10 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                           </p>
                         </Card>
                     ) : (
-                      <Card className="p-6 h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button className="w-full">Valider</Button></form></Card>
+                      <Card className="p-6 h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button type="submit" className="w-full">Valider</Button></form></Card>
                     )}
                     
-                    {!isComposite && <Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3><form onSubmit={handleAddAssetHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} /></div><Button className="w-full" variant="secondary">Enregistrer</Button></form></Card>}
+                    {!isComposite && <Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3><form onSubmit={handleAddAssetHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full" variant="secondary">Enregistrer</Button></form></Card>}
                   </div>
                   <div className="lg:col-span-2 space-y-6">
                     <Card className="p-6 border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
@@ -773,7 +787,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         {viewMode === 'position' && selectedPosition && (
           <>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{selectedPosition.value.toLocaleString()} €</p></div></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="p-6 border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div>))}</div></Card></div></div></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="p-6 border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div>))}</div></Card></div></div></div>
           </>
         )}
       </div>
@@ -781,7 +795,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   );
 };
 
-const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction }) => {
+const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction, userProfile }) => {
   const [timeRange, setTimeRange] = useState('6M');
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -814,7 +828,8 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     const current = keys.reduce((sum, k) => sum + (data[data.length - 1][k] || 0), 0);
     const previous = keys.reduce((sum, k) => sum + (data[data.length - 2][k] || 0), 0);
     if (previous === 0) return current === 0 ? "0.0" : "100.0";
-    return ((current - previous) / previous * 100).toFixed(1);
+    // Correction: Division par la valeur absolue pour gérer correctement le passage de négatif à positif (ou moins négatif)
+    return ((current - previous) / Math.abs(previous) * 100).toFixed(1);
   };
 
   const netWorthGrowth = getGrowth(evolutionData, ['totalNet']);
@@ -865,7 +880,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 animate-in fade-in">
          <div className="p-6 bg-white rounded-full shadow-lg text-blue-600 mb-2"><TrendingUp size={48} /></div>
-         <h2 className="text-2xl font-bold text-slate-800">Bienvenue sur votre Tableau de Bord</h2>
+         <h2 className="text-2xl font-bold text-slate-800">Bienvenue {userProfile?.firstName || ''} sur votre Tableau de Bord</h2>
          <Button onClick={() => setActiveTab('assets')} className="shadow-lg hover:scale-105 transition-transform">Commencer maintenant <ArrowRight size={18} /></Button>
       </div>
     );
@@ -892,7 +907,12 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   return (
     <div className="space-y-6 animate-in fade-in duration-500 text-slate-900 bg-slate-100 min-h-screen p-4">
       <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4"><div></div><div className="flex gap-2"><Button variant="magic" onClick={handleAnalyzeDashboard} disabled={isAnalyzing} className="text-xs px-3 py-1.5">{isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{isAnalyzing ? "..." : "Analyser"}</Button><div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex">{['6M', '1Y', '5Y', 'ALL'].map(range => (<button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${timeRange === range ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}>{range === 'ALL' ? 'Tout' : range}</button>))}</div></div></div>
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+        <div>
+            {userProfile?.firstName && <h1 className="text-2xl font-bold text-slate-800">Bonjour, {userProfile.firstName} 👋</h1>}
+        </div>
+        <div className="flex gap-2"><Button variant="magic" onClick={handleAnalyzeDashboard} disabled={isAnalyzing} className="text-xs px-3 py-1.5">{isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{isAnalyzing ? "..." : "Analyser"}</Button><div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex">{['6M', '1Y', '5Y', 'ALL'].map(range => (<button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${timeRange === range ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}>{range === 'ALL' ? 'Tout' : range}</button>))}</div></div>
+      </div>
       {aiAnalysis && <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 relative mb-4"><button onClick={() => setAiAnalysis(null)} className="absolute top-2 right-2 text-indigo-400"><X size={16} /></button><div className="flex gap-3"><div className="bg-white p-2 rounded-full h-fit text-indigo-600"><Bot size={20} /></div><div className="text-sm text-indigo-900 whitespace-pre-line">{aiAnalysis}</div></div></div>}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${netWorth.toLocaleString()} €`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${investments.toLocaleString()} €`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${liquidities.toLocaleString()} €`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
@@ -958,6 +978,8 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   );
 };
 
+// ... AssetsView, BudgetView, AiAdvisorView remain largely the same, skipped for brevity but would be here ...
+
 const AssetsView = ({ assets, setAssets }) => {
   const [newAsset, setNewAsset] = useState({ name: '', institution: '', value: '', type: 'liquidite' });
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -990,7 +1012,7 @@ const AssetsView = ({ assets, setAssets }) => {
       {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant="primary"><PlusCircle size={20} /> Ajouter</Button></div>)}
       {isFormOpen && (
         <Card className="p-6 bg-blue-50 border-blue-100">
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button className="w-full">Ajouter</Button></form>
+          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
         </Card>
       )}
       <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{groupedAssets[type].reduce((sum, a) => sum + a.value, 0).toLocaleString()} €</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
@@ -1034,7 +1056,6 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       transaction.toId = transferTo;
       if (!transaction.fromId || !transaction.toId || transaction.fromId === transaction.toId) return;
     } else {
-      // FIX: Ensure linkedAssetId is included for non-transfer updates
       transaction.linkedAssetId = selectedAccount;
     }
 
@@ -1150,7 +1171,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
         <div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.date} onChange={(e) => setNewTrans({...newTrans, date: e.target.value})} /></div>
         <div className="flex gap-2">
             {editId && <Button type="button" variant="secondary" className="flex-1" onClick={cancelEdit}>Annuler</Button>}
-            <Button className="flex-1">{editId ? "Modifier" : "Enregistrer"}</Button>
+            <Button className="flex-1" type="submit">{editId ? "Modifier" : "Enregistrer"}</Button>
         </div>
         </form></Card>
       </div>
@@ -1166,12 +1187,38 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
             />
         </Card>
 
-        <Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique</h3></div><div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">{transactions.map(t => (<div key={t.id} className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => startEdit(t)} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Modifier"><Edit size={16} /></button>
-            <button onClick={() => setTransactionToDelete(t.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
-        </div>
-        </div></div>))}</div></Card>
+        <Card className="overflow-hidden border-slate-200">
+          <div className="bg-slate-50 p-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800">Historique</h3>
+          </div>
+          <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">
+            {transactions.map(t => (
+              <div key={t.id} className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                    {t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-800">{t.label}</p>
+                    <div className="flex gap-2 items-center">
+                      <p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                      {t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
+                    {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €
+                  </span>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(t)} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Modifier"><Edit size={16} /></button>
+                    <button onClick={() => setTransactionToDelete(t.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -1206,31 +1253,220 @@ const AiAdvisorView = ({ assets, transactions }) => {
   );
 };
 
-const LoginScreen = ({ onLogin, onEmailLogin, onEmailRegister }) => {
+// --- AUTHENTICATION COMPONENTS ---
+
+const LoginScreen = ({ onLogin, onEmailLogin, onEmailRegister, onGoogleLogin, onForgotPassword }) => {
+  const [view, setView] = useState('login'); // 'login', 'register', 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [error, setError] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  
+  // Nouveaux champs pour inscription
+  const [birthDate, setBirthDate] = useState('');
+  const [monthlyIncome, setMonthlyIncome] = useState('');
+  const [financialGoal, setFinancialGoal] = useState('freedom');
+  const [riskProfile, setRiskProfile] = useState('balanced');
 
-  const handleSubmit = (e) => {
-    e.preventDefault(); setError('');
-    const promise = isRegistering ? onEmailRegister(email, password) : onEmailLogin(email, password);
-    promise.catch(e => setError(e.message));
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+
+  const handleGoogleClick = async () => {
+    setError('');
+    setSuccess('');
+    try {
+      await onGoogleLogin();
+    } catch (e) {
+      console.error("Erreur Google Auth:", e);
+      let msg = e.message;
+      if (msg.includes('auth/popup-closed-by-user')) {
+        msg = "La fenêtre de connexion a été fermée.";
+      } else if (msg.includes('auth/unauthorized-domain')) {
+        msg = "DOMAINE NON AUTORISÉ : Ajoutez ce domaine dans la Console Firebase > Authentication > Settings > Authorized domains.";
+      } else if (msg.includes('auth/popup-blocked')) {
+        msg = "Pop-up bloquée par le navigateur. Veuillez l'autoriser.";
+      } else if (msg.includes('auth/cancelled-popup-request')) {
+        msg = "Trop de pop-ups. Réessayez.";
+      }
+      setError(msg);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); 
+    setError('');
+    setSuccess('');
+    
+    try {
+      if (view === 'register') {
+        if (!firstName || !lastName) {
+          setError("Nom et Prénom requis");
+          return;
+        }
+        await onEmailRegister(email, password, { 
+            firstName, 
+            lastName,
+            birthDate,
+            monthlyIncome,
+            financialGoal,
+            riskProfile
+        });
+      } else if (view === 'login') {
+        await onEmailLogin(email, password);
+      } else if (view === 'forgot') {
+        await onForgotPassword(resetEmail);
+        setSuccess("Email de réinitialisation envoyé ! Vérifiez vos spams.");
+      }
+    } catch (e) {
+      let msg = e.message;
+      if (msg.includes('auth/invalid-email')) msg = "Email invalide.";
+      else if (msg.includes('auth/user-not-found')) msg = "Compte inexistant. Vérifiez vos identifiants.";
+      else if (msg.includes('auth/wrong-password')) msg = "Mot de passe incorrect.";
+      else if (msg.includes('auth/email-already-in-use')) msg = "Cet email est déjà utilisé.";
+      else if (msg.includes('auth/weak-password')) msg = "Le mot de passe doit faire au moins 6 caractères.";
+      else if (msg.includes('auth/invalid-credential')) msg = "Identifiants invalides.";
+      setError(msg);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 font-sans text-slate-900">
-      <Card className="w-full max-w-md p-8 shadow-xl border-0"><div className="text-center mb-8"><div className="inline-flex p-4 bg-blue-100 rounded-full text-blue-600 mb-4"><TrendingUp size={40} /></div><h1 className="text-3xl font-bold text-slate-900 mb-2">MyWealth.io</h1></div><form onSubmit={handleSubmit} className="space-y-4"><div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><input type="email" className="w-full p-3 rounded-lg border border-slate-300" value={email} onChange={(e) => setEmail(e.target.value)} required /></div><div><label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe</label><input type="password" className="w-full p-3 rounded-lg border border-slate-300" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>{error && <div className="text-red-600 text-xs">{error}</div>}<button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl">{isRegistering ? "Créer un compte" : "Se connecter"}</button></form><div className="mt-4 text-center"><button onClick={() => setIsRegistering(!isRegistering)} className="text-sm text-blue-600 hover:underline">{isRegistering ? "Déjà un compte ?" : "Pas de compte ?"}</button></div><div className="relative my-6"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-slate-500">Ou</span></div></div><button onClick={() => onLogin().catch(e => setError(e.message))} className="w-full bg-slate-100 text-slate-600 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2"><User size={18} /> Accès Invité</button></Card>
+      <Card className="w-full max-w-lg p-8 shadow-xl border-0">
+        <div className="text-center mb-8">
+          <div className="inline-flex p-4 bg-blue-100 rounded-full text-blue-600 mb-4"><TrendingUp size={40} /></div>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">MyWealth.io</h1>
+          <p className="text-slate-500">
+            {view === 'register' ? "Créez votre compte sécurisé" : view === 'forgot' ? "Récupération de compte" : "Gérez votre patrimoine intelligemment"}
+          </p>
+        </div>
+
+        {view !== 'forgot' && (
+          <div className="mb-6">
+            <Button variant="google" className="w-full mb-4 flex items-center justify-center gap-3 py-3" onClick={handleGoogleClick}>
+              <Globe size={18} className="text-blue-600" />
+              Continuer avec Google
+            </Button>
+            {error && error.includes("Pop-up") && (
+                <div className="text-xs text-center text-slate-500 mb-2">
+                    Si le pop-up reste blanc, essayez de désactiver vos extensions (AdBlock) ou utilisez un autre navigateur.
+                </div>
+            )}
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+              <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-slate-500">Ou avec email</span></div>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {view === 'register' && (
+            <div className="space-y-4 animate-in slide-in-from-left">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Prénom *</label>
+                    <input type="text" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nom *</label>
+                    <input type="text" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                  </div>
+                </div>
+                
+                {/* Optional Financial Profile Fields during Registration */}
+                <div className="border-t border-slate-100 pt-3">
+                    <p className="text-xs font-bold text-indigo-600 mb-3 flex items-center gap-1"><Sparkles size={12}/> Personnaliser mon profil (Optionnel)</p>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Date Naissance</label>
+                            <input type="date" className="w-full p-2 rounded-lg border border-slate-300 text-sm" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Revenu Mensuel</label>
+                            <input type="number" className="w-full p-2 rounded-lg border border-slate-300 text-sm" placeholder="€" value={monthlyIncome} onChange={(e) => setMonthlyIncome(e.target.value)} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Objectif Principal</label>
+                        <select className="w-full p-2 rounded-lg border border-slate-300 text-sm bg-white" value={financialGoal} onChange={(e) => setFinancialGoal(e.target.value)}>
+                            <option value="freedom">Liberté Financière / FIRE</option>
+                            <option value="retirement">Préparer sa retraite</option>
+                            <option value="real_estate">Achat Immobilier</option>
+                            <option value="safety">Épargne de précaution</option>
+                            <option value="growth">Croissance du capital</option>
+                            <option value="other">Autre</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+          )}
+
+          {view !== 'forgot' ? (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Email *</label>
+                <input type="email" className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Mot de passe *</label>
+                <input type="password" className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </div>
+            </>
+          ) : (
+            <div className="animate-in fade-in">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Votre email</label>
+              <input type="email" className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="exemple@email.com" required />
+            </div>
+          )}
+
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg flex items-center gap-2 font-medium border border-red-200"><AlertCircle size={16} className="shrink-0"/> <span>{error}</span></div>}
+          {success && <div className="text-green-600 text-sm bg-green-50 p-3 rounded-lg flex items-center gap-2"><CheckCircle size={16}/> {success}</div>}
+
+          <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200">
+            {view === 'register' ? "Créer un compte" : view === 'forgot' ? "Envoyer le lien" : "Se connecter"}
+          </button>
+        </form>
+
+        <div className="mt-6 flex flex-col gap-3 text-center text-sm">
+          {view === 'login' && (
+            <>
+              <button onClick={() => setView('forgot')} className="text-slate-500 hover:text-blue-600 transition-colors">Mot de passe oublié ?</button>
+              <div className="text-slate-600">Pas encore de compte ? <button onClick={() => setView('register')} className="font-bold text-blue-600 hover:underline">S'inscrire</button></div>
+            </>
+          )}
+          
+          {(view === 'register' || view === 'forgot') && (
+            <button onClick={() => setView('login')} className="text-blue-600 hover:underline flex items-center justify-center gap-1">
+              <ChevronLeft size={14} /> Retour à la connexion
+            </button>
+          )}
+        </div>
+
+        {view === 'login' && (
+          <>
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+              <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-slate-500">Options développeur</span></div>
+            </div>
+            <button onClick={() => onLogin().catch(e => setError(e.message))} className="w-full bg-slate-100 text-slate-600 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors">
+              <User size={18} /> Mode Invité (Données volatiles)
+            </button>
+          </>
+        )}
+      </Card>
     </div>
   );
 };
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [assets, setAssets] = useState(INITIAL_ASSETS);
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
   const [loading, setLoading] = useState(true);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // --- AUTO LOGOUT LOGIC ---
   const [showAutoLogoutModal, setShowAutoLogoutModal] = useState(false);
@@ -1289,21 +1525,141 @@ export default function App() {
     startTimers();
   };
 
-  useEffect(() => { const u = onAuthStateChanged(auth, (c) => { setUser(c); setLoading(false); }); return () => u(); }, []);
+  // --- AUTH STATE & DATA FETCHING ---
+
+  useEffect(() => { 
+    const unsubAuth = onAuthStateChanged(auth, async (currentUser) => { 
+      setUser(currentUser); 
+      if (currentUser) {
+         // Load User Profile Data (Name/Surname)
+         try {
+             const profileDoc = await getDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info'));
+             if (profileDoc.exists()) {
+                 setUserProfile(profileDoc.data());
+             } else {
+                 // Try to init profile from Auth provider data (e.g. Google)
+                 if (currentUser.displayName) {
+                     const names = currentUser.displayName.split(' ');
+                     const newProfile = { 
+                         firstName: names[0], 
+                         lastName: names.length > 1 ? names.slice(1).join(' ') : '',
+                         email: currentUser.email 
+                     };
+                     await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info'), newProfile);
+                     setUserProfile(newProfile);
+                 }
+             }
+         } catch(e) { 
+             console.error("Error fetching profile", e); 
+             // Silent fail for profile load, not critical
+         }
+      } else {
+          setUserProfile(null);
+      }
+      setLoading(false); 
+    }); 
+    return () => unsubAuth(); 
+  }, []);
 
   useEffect(() => {
     if (!user) return;
-    const unsubAssets = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'assets'), (doc) => { if (doc.exists()) setAssets(doc.data().items || []); else saveAssets(INITIAL_ASSETS); });
-    const unsubTrans = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'transactions'), (doc) => { if (doc.exists()) setTransactions(doc.data().items || []); else saveTransactions([]); });
+    
+    // Ajout d'une gestion d'erreur robuste pour les listeners Firestore
+    const unsubAssets = onSnapshot(
+      doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'assets'), 
+      (docSnapshot) => { 
+        if (docSnapshot.exists()) setAssets(docSnapshot.data().items || []); 
+        else saveAssets(INITIAL_ASSETS); // Init empty if new
+      },
+      (error) => {
+        console.error("Erreur lecture Assets:", error);
+        alert("Erreur de connexion aux données (Assets). Vérifiez vos droits d'accès.");
+      }
+    );
+
+    const unsubTrans = onSnapshot(
+      doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'transactions'), 
+      (docSnapshot) => { 
+        if (docSnapshot.exists()) setTransactions(docSnapshot.data().items || []); 
+        else saveTransactions([]); 
+      },
+      (error) => {
+        console.error("Erreur lecture Transactions:", error);
+      }
+    );
+
     return () => { unsubAssets(); unsubTrans(); };
   }, [user]);
 
-  const saveAssets = async (newAssets) => { if (!user) return; try { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'assets'), { items: newAssets }); } catch (e) { console.error(e); } };
-  const saveTransactions = async (newTransactions) => { if (!user) return; try { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'transactions'), { items: newTransactions }); } catch (e) { console.error(e); } };
+  const saveAssets = async (newAssets) => { 
+    if (!user) return; 
+    try { 
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'assets'), { items: newAssets }); 
+    } catch (e) { 
+      console.error("Erreur sauvegarde Assets:", e);
+      alert("Impossible d'enregistrer : " + e.message); // Feedback utilisateur
+    } 
+  };
+
+  const saveTransactions = async (newTransactions) => { 
+    if (!user) return; 
+    try { 
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'transactions'), { items: newTransactions }); 
+    } catch (e) { 
+      console.error("Erreur sauvegarde Transactions:", e); 
+      alert("Impossible d'enregistrer la transaction : " + e.message);
+    } 
+  };
 
   const handleSetAssets = (newAssets) => { setAssets(newAssets); saveAssets(newAssets); };
   const handleSetTransactions = (newTransactions) => { setTransactions(newTransactions); saveTransactions(newTransactions); };
 
+  // --- AUTH ACTIONS ---
+
+  const handleLogin = async () => signInAnonymously(auth);
+  
+  const handleEmailLogin = async (email, password) => {
+      await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const handleEmailRegister = async (email, password, profileData) => {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Create user profile in Firestore immediately
+      await setDoc(doc(db, 'artifacts', appId, 'users', userCredential.user.uid, 'profile', 'info'), {
+          ...profileData,
+          email,
+          createdAt: new Date().toISOString()
+      });
+  };
+
+  const handleGoogleLogin = async () => {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' }); 
+      auth.useDeviceLanguage(); 
+      await signInWithPopup(auth, provider);
+  };
+
+  const handleForgotPassword = async (email) => {
+      await sendPasswordResetEmail(auth, email);
+  };
+
+  const handleLogout = () => signOut(auth);
+
+  const handleUpdateProfile = async (formData) => {
+    if (!user) return;
+    try {
+        const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+        await setDoc(profileRef, formData, { merge: true });
+        setUserProfile(prev => ({ ...prev, ...formData }));
+    } catch (e) {
+        console.error("Error updating profile:", e);
+        alert("Erreur lors de la mise à jour du profil.");
+    }
+  };
+
+
+  // --- TRANSACTION HELPERS (Keep existing logic) ---
+  
   const updateAssetHistoryWithDelta = (asset, date, delta) => {
     const prevHistory = asset.history || [];
     let updatedHistory = prevHistory.map(h => { if (new Date(h.date) >= new Date(date)) { return { ...h, value: h.value + delta }; } return h; });
@@ -1495,13 +1851,15 @@ export default function App() {
     }
   };
 
-  const handleLogin = async () => signInAnonymously(auth);
-  const handleEmailLogin = async (email, password) => signInWithEmailAndPassword(auth, email, password);
-  const handleEmailRegister = async (email, password) => createUserWithEmailAndPassword(auth, email, password);
-  const handleLogout = () => signOut(auth);
-
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50"><Loader2 className="animate-spin" /></div>;
-  if (!user) return <LoginScreen onLogin={handleLogin} onEmailLogin={handleEmailLogin} onEmailRegister={handleEmailRegister} />;
+  
+  if (!user) return <LoginScreen 
+        onLogin={handleLogin} 
+        onEmailLogin={handleEmailLogin} 
+        onEmailRegister={handleEmailRegister} 
+        onGoogleLogin={handleGoogleLogin}
+        onForgotPassword={handleForgotPassword}
+    />;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
@@ -1512,9 +1870,24 @@ export default function App() {
         onStayConnected={confirmPresence} 
       />
 
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 md:px-8"><div className="max-w-7xl mx-auto h-16 flex items-center justify-between"><div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><TrendingUp size={20} /></div><span className="font-bold text-xl tracking-tight text-slate-800 hidden md:block">MyWealth<span className="text-blue-600">.io</span></span></div><div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">{[{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'assets', label: 'Patrimoine', icon: Wallet }, { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }].map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}><tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} /><span className="hidden md:inline">{tab.label}</span></button>))}</div><div className="flex items-center gap-3"><div className="hidden md:flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium"><Cloud size={12} /> Sauvegardé</div><button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Déconnexion"><LogOut size={20} /></button></div></div></nav>
+      <ProfileModal 
+        isOpen={isProfileModalOpen} 
+        onClose={() => setIsProfileModalOpen(false)} 
+        userProfile={userProfile} 
+        onUpdate={handleUpdateProfile} 
+      />
+
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 md:px-8"><div className="max-w-7xl mx-auto h-16 flex items-center justify-between"><div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><TrendingUp size={20} /></div><span className="font-bold text-xl tracking-tight text-slate-800 hidden md:block">MyWealth<span className="text-blue-600">.io</span></span></div><div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">{[{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'assets', label: 'Patrimoine', icon: Wallet }, { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }].map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}><tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} /><span className="hidden md:inline">{tab.label}</span></button>))}</div><div className="flex items-center gap-3">
+        {userProfile ? (
+             <button onClick={() => setIsProfileModalOpen(true)} className="hidden md:flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
+                <User size={12} className="text-blue-500"/> {userProfile.firstName}
+             </button>
+        ) : (
+            <div className="hidden md:flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium"><Cloud size={12} /> Sauvegardé</div>
+        )}
+        <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Déconnexion"><LogOut size={20} /></button></div></div></nav>
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8">
-        {activeTab === 'dashboard' && <DashboardView assets={assets} transactions={transactions} setActiveTab={setActiveTab} onDeleteTransaction={handleDeleteTransaction} />}
+        {activeTab === 'dashboard' && <DashboardView assets={assets} transactions={transactions} setActiveTab={setActiveTab} onDeleteTransaction={handleDeleteTransaction} userProfile={userProfile} />}
         {activeTab === 'assets' && <AssetsView assets={assets} setAssets={handleSetAssets} />}
         {activeTab === 'budget' && (
           <BudgetView 
