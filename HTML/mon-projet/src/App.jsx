@@ -13,7 +13,7 @@ import {
   LogOut, User, Lock, Mail, AlertCircle, ArrowRight, Cloud,
   Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
   Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase,
-  CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale
+  CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale, Menu
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -153,7 +153,6 @@ const processFlowData = (timeRange, transactions) => {
     const monthName = date.toLocaleDateString('fr-FR', { month: 'short', year: i > 12 ? '2-digit' : undefined });
     const monthTrans = safeTransactions.filter(t => t.date.startsWith(monthKey));
     
-    // On exclut les transferts des calculs de revenus/dépenses car ce sont des mouvements neutres
     const revenus = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const depenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const solde = revenus - depenses;
@@ -196,7 +195,7 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message }) => {
       <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full border border-slate-100 transform scale-100 transition-all">
         <div className="flex items-center gap-3 text-red-600 mb-3">
           <div className="p-2 bg-red-50 rounded-full"><AlertTriangle size={24} /></div>
-          <h3 className="text-lg font-bold text-slate-900">{title || "Confirmer la suppression"}</h3>
+          <h3 className="text-lg font-bold text-slate-900">{title || "Confirmer"}</h3>
         </div>
         <p className="text-slate-600 mb-6 text-sm leading-relaxed">{message || "Êtes-vous sûr de vouloir supprimer cet élément ?"}</p>
         <div className="flex justify-end gap-3">
@@ -249,9 +248,9 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl p-6 max-w-lg w-full border border-slate-100 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Modifier mon profil</h3>
+            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Mon Profil</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full"><X size={20}/></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -268,7 +267,7 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
 
             <div className="border-t border-slate-100 pt-4">
                 <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2"><Activity size={16}/> Données Financières</h4>
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Date de naissance</label>
                         <input type="date" name="birthDate" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.birthDate} onChange={handleChange} />
@@ -309,7 +308,7 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
 
             <div className="flex gap-3 justify-end mt-8 border-t border-slate-100 pt-4">
                 <Button variant="secondary" onClick={onClose} type="button">Annuler</Button>
-                <Button type="submit" disabled={loading}>{loading ? <Loader2 className="animate-spin" size={18}/> : "Enregistrer les modifications"}</Button>
+                <Button type="submit" disabled={loading}>{loading ? <Loader2 className="animate-spin" size={18}/> : "Enregistrer"}</Button>
             </div>
         </form>
       </div>
@@ -340,8 +339,9 @@ const InactivityModal = ({ isOpen, onStayConnected }) => {
   );
 };
 
+// Modif: p-4 sur mobile, p-6 sur md
 const Card = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-xl shadow-sm border border-slate-300 hover:shadow-md transition-all duration-300 ${className}`}>
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-300 hover:shadow-md transition-all duration-300 p-4 md:p-6 ${className}`}>
     {children}
   </div>
 );
@@ -367,12 +367,12 @@ const Button = ({ onClick, children, variant = "primary", className = "", disabl
 const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percentage }) => {
   const hasData = data && data.length > 0 && data.some(d => d.value > 0);
   return (
-    <Card className="p-0 overflow-hidden relative flex flex-col justify-between h-36 md:h-40 hover:border-indigo-200 bg-slate-50/50 border-slate-200">
-      <div className="p-5 relative z-10">
+    <div className={`bg-white rounded-xl shadow-sm border border-slate-300 hover:shadow-md transition-all duration-300 overflow-hidden relative flex flex-col justify-between h-32 md:h-40 hover:border-indigo-200 bg-slate-50/50`}>
+      <div className="p-4 md:p-5 relative z-10">
         <div className="flex justify-between items-start">
           <div>
             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
-            <h3 className="text-2xl font-extrabold text-slate-900">{value}</h3>
+            <h3 className="text-xl md:text-2xl font-extrabold text-slate-900">{value}</h3>
           </div>
           <div className={`p-2 rounded-lg bg-white border border-slate-100 shadow-sm text-${color}-600`}><Icon size={20} color={color} /></div>
         </div>
@@ -381,7 +381,7 @@ const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percent
              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${parseFloat(percentage) >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {parseFloat(percentage) >= 0 ? '+' : ''}{percentage}%
              </span>
-             <span className="text-[10px] text-slate-400 ml-2">vs fin mois dernier</span>
+             <span className="text-[10px] text-slate-400 ml-2 hidden sm:inline">vs fin mois dernier</span>
           </div>
         )}
       </div>
@@ -400,7 +400,7 @@ const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percent
           </ResponsiveContainer>
         ) : (<div className="w-full h-full flex items-end justify-center pb-2 opacity-50"><div className="w-full h-1 bg-slate-100"></div></div>)}
       </div>
-    </Card>
+    </div>
   );
 };
 
@@ -418,7 +418,7 @@ const MessageBubble = ({ message }) => {
   };
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[85%] p-4 rounded-2xl text-sm shadow-sm ${isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 rounded-bl-none'}`}>
+      <div className={`max-w-[90%] md:max-w-[85%] p-4 rounded-2xl text-sm shadow-sm ${isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 rounded-bl-none'}`}>
         {parseContent(message.content)}
       </div>
     </div>
@@ -471,12 +471,12 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
   const centerSubLabel = activeItem ? `${((activeItem.value / totalExpenses) * 100).toFixed(1)}%` : "Total";
 
   const renderCustomizedLabel = useCallback(({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, payload }) => {
+    if (percent < 0.02) return null;
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     const CategoryIcon = EXPENSE_CATEGORIES[payload.name]?.icon || Circle;
-    if (percent < 0.02) return null;
     return (
       <g pointerEvents="none">
         <foreignObject x={x - 12} y={y - 12} width={24} height={24}>
@@ -514,7 +514,7 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
              ) : (
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={4} dataKey="value" label={renderCustomizedLabel} labelLine={false} onMouseEnter={onPieEnter} onMouseLeave={onPieEnter} animationDuration={800}>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={4} dataKey="value" label={renderCustomizedLabel} labelLine={false} onMouseEnter={onPieEnter} onMouseLeave={onPieLeave} animationDuration={800}>
                       {pieData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={EXPENSE_CATEGORIES[entry.name]?.color || EXPENSE_CATEGORIES['Autre'].color} stroke="none" opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.3} style={{ transition: 'opacity 0.2s ease', outline: 'none' }}/>
                       ))}
@@ -719,28 +719,29 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
       <ConfirmationModal isOpen={!!deleteConfig} onClose={() => setDeleteConfig(null)} onConfirm={executeDelete} />
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+      {/* Full screen on mobile, rounded card on desktop */}
+      <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
         {viewMode === 'asset' && (
           <>
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div><button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Building size={24} className="text-blue-600"/>{asset.name}</h2><p className="text-slate-500">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p></div>
-              <div className="text-right"><p className="text-sm text-slate-500">Valorisation Actuelle</p><p className="text-3xl font-bold text-blue-600">{asset.value.toLocaleString()} €</p></div>
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+              <div><button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2"><Building size={20} className="text-blue-600"/>{asset.name}</h2><p className="text-slate-500 text-xs md:text-sm">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p></div>
+              <div className="text-right"><p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p><p className="text-xl md:text-3xl font-bold text-blue-600">{asset.value.toLocaleString()} €</p></div>
             </div>
-            <div className="flex border-b border-slate-100 px-6">
-              {isComposite && <button onClick={() => setActiveTab('composition')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'composition' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><List size={18} /> Composition</button>}
-              <button onClick={() => setActiveTab('history')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><History size={18} /> Historique</button>
-              <button onClick={() => setActiveTab('analysis')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><Sparkles size={18} /> Analyse IA</button>
+            <div className="flex border-b border-slate-100 px-4 md:px-6 overflow-x-auto no-scrollbar">
+              {isComposite && <button onClick={() => setActiveTab('composition')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'composition' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><List size={18} /> Composition</button>}
+              <button onClick={() => setActiveTab('history')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><History size={18} /> Historique</button>
+              <button onClick={() => setActiveTab('analysis')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><Sparkles size={18} /> Analyse IA</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 pb-20 md:pb-6">
               {activeTab === 'composition' && isComposite && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <Card className="p-6 h-fit bg-slate-50/50 border-slate-200">
+                  <Card className="h-fit bg-slate-50/50 border-slate-200">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-blue-600"/> Ajouter une ligne</h3>
                     <form onSubmit={handleAddPosition} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" placeholder="Ex: Air Liquide" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosition.value} onChange={(e) => setNewPosition({...newPosition, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center">Ajouter</Button></form>
                   </Card>
-                  <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200">
+                  <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200 p-0 md:p-0">
                     <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2">Lignes détenues</h3></div>
                     <div className="divide-y divide-slate-100 overflow-y-auto max-h-[400px]">
                       {(!asset.positions || asset.positions.length === 0) ? (<div className="p-10 text-center text-slate-400">Aucune ligne.</div>) : (
@@ -760,22 +761,22 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="space-y-6">
                     {isComposite ? (
-                        <Card className="p-6 h-fit bg-indigo-50 border-indigo-100">
+                        <Card className="h-fit bg-indigo-50 border-indigo-100">
                           <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
                           <p className="text-sm text-indigo-800 leading-relaxed">
                             L'historique de ce compte est calculé automatiquement en additionnant l'historique de chaque ligne (actions, fonds, espèces).
                           </p>
                         </Card>
                     ) : (
-                      <Card className="p-6 h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button type="submit" className="w-full">Valider</Button></form></Card>
+                      <Card className="h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button type="submit" className="w-full">Valider</Button></form></Card>
                     )}
                     
-                    {!isComposite && <Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3><form onSubmit={handleAddAssetHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full" variant="secondary">Enregistrer</Button></form></Card>}
+                    {!isComposite && <Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3><form onSubmit={handleAddAssetHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full" variant="secondary">Enregistrer</Button></form></Card>}
                   </div>
                   <div className="lg:col-span-2 space-y-6">
-                    <Card className="p-6 border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
+                    <Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%"><AreaChart data={assetChartData}><defs><linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAsset)" /></AreaChart></ResponsiveContainer></div></Card>
-                    <Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique Global</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
+                    <Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique Global</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
                       <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span>{!isComposite && <button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>}</div></div>))}</div></Card>
                   </div>
                 </div>
@@ -787,7 +788,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         {viewMode === 'position' && selectedPosition && (
           <>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{selectedPosition.value.toLocaleString()} €</p></div></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="p-6 h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="p-6 border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div>))}</div></Card></div></div></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div>))}</div></Card></div></div></div>
           </>
         )}
       </div>
@@ -905,7 +906,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 text-slate-900 bg-slate-100 min-h-screen p-4">
+    <div className="space-y-6 animate-in fade-in duration-500 text-slate-900 bg-slate-100 min-h-screen p-4 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
         <div>
@@ -916,7 +917,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
       {aiAnalysis && <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 relative mb-4"><button onClick={() => setAiAnalysis(null)} className="absolute top-2 right-2 text-indigo-400"><X size={16} /></button><div className="flex gap-3"><div className="bg-white p-2 rounded-full h-fit text-indigo-600"><Bot size={20} /></div><div className="text-sm text-indigo-900 whitespace-pre-line">{aiAnalysis}</div></div></div>}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${netWorth.toLocaleString()} €`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${investments.toLocaleString()} €`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${liquidities.toLocaleString()} €`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        <Card className="p-6 lg:col-span-2 flex flex-col border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingUp size={20} className="text-blue-600"/> Évolution</h3><div className="bg-slate-100 p-0.5 rounded-lg flex items-center"><button onClick={() => setViewMode('net')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'net' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Net</button><button onClick={() => setViewMode('brut')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'brut' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Brut</button></div></div>
+        <Card className="lg:col-span-2 flex flex-col border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingUp size={20} className="text-blue-600"/> Évolution</h3><div className="bg-slate-100 p-0.5 rounded-lg flex items-center"><button onClick={() => setViewMode('net')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'net' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Net</button><button onClick={() => setViewMode('brut')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'brut' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Brut</button></div></div>
         <div className="h-72 w-full min-h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={evolutionData}>
@@ -956,10 +957,10 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
           </ResponsiveContainer>
         </div>
         </Card>
-        <Card className="p-6 border-slate-300 flex flex-col justify-center relative"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3><div className="h-64 w-full relative mt-4 min-h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}</Pie><RechartsTooltip /><Legend content={renderLegend} verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}><span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span><span className="text-xs text-slate-500">Total</span></div></div></Card>
+        <Card className="border-slate-300 flex flex-col justify-center relative"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3><div className="h-64 w-full relative mt-4 min-h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}</Pie><RechartsTooltip /><Legend content={renderLegend} verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}><span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span><span className="text-xs text-slate-500">Total</span></div></div></Card>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Card className="p-6 relative border-slate-300">
+        <Card className="relative border-slate-300">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Revenus & Dépenses</h3>
                 <Button variant="magic" onClick={handleForecast} disabled={isForecasting} className="text-xs px-2 py-1 h-8">{isForecasting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />} Prévision</Button>
@@ -972,7 +973,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 hasFlowData={hasFlowData} 
             />
         </Card>
-        <Card className="p-6 flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (<div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></div></Card>
+        <Card className="flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (<div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></div></Card>
       </div>
     </div>
   );
@@ -1006,16 +1007,16 @@ const AssetsView = ({ assets, setAssets }) => {
   const groupedAssets = useMemo(() => { const groups = {}; assets.forEach(asset => { if (!groups[asset.type]) groups[asset.type] = []; groups[asset.type].push(asset); }); return groups; }, [assets]);
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-right duration-300 text-slate-900">
+    <div className="space-y-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={() => { handleDelete(assetToDelete); setAssetToDelete(null); }} message="Supprimer ce compte ?" />
       {selectedAsset && (<AssetDetailOverlay key={selectedAsset.id} asset={selectedAsset} onClose={() => setSelectedAsset(null)} onUpdate={handleUpdateAsset} />)}
       {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant="primary"><PlusCircle size={20} /> Ajouter</Button></div>)}
       {isFormOpen && (
-        <Card className="p-6 bg-blue-50 border-blue-100">
+        <Card className="bg-blue-50 border-blue-100">
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
         </Card>
       )}
-      <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{groupedAssets[type].reduce((sum, a) => sum + a.value, 0).toLocaleString()} €</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
+      <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{groupedAssets[type].reduce((sum, a) => sum + a.value, 0).toLocaleString()} €</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
         <div key={asset.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0">
           <div className="flex items-center gap-4"><div className="bg-slate-100 p-2 rounded-lg text-slate-500"><Building size={20} /></div><div><p className="font-semibold text-slate-800">{asset.name}</p><p className="text-sm text-slate-500">{asset.institution}</p></div></div><div className="flex items-center gap-4"><span className="font-bold text-slate-700">{asset.value.toLocaleString()} €</span><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button></div></div>
         </div>
@@ -1139,10 +1140,10 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right duration-300 text-slate-900">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <div className="lg:col-span-1 space-y-6">
-        <Card className="p-6 bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
-        <Card className="p-6 sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
+        <Card className="bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
+        <Card className="sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
         
         <div><label className="block text-xs font-semibold text-slate-600 mb-1">{newTrans.type === 'transfer' ? "Compte Débité (Source)" : "Compte (Optionnel)"}</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         
@@ -1178,7 +1179,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       <div className="lg:col-span-2 space-y-6">
         <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
         
-        <Card className="p-6 relative border-slate-200">
+        <Card className="relative border-slate-200">
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Analyse des Flux</h3>
              <InteractiveBudgetChart 
                 cashflowData={cashflowHistoryData} 
@@ -1187,7 +1188,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
             />
         </Card>
 
-        <Card className="overflow-hidden border-slate-200">
+        <Card className="overflow-hidden border-slate-200 p-0 md:p-0">
           <div className="bg-slate-50 p-4 border-b border-slate-100">
             <h3 className="font-bold text-slate-800">Historique</h3>
           </div>
@@ -1246,8 +1247,8 @@ const AiAdvisorView = ({ assets, transactions }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-140px)] animate-in fade-in">
-      <div className="lg:col-span-1 space-y-4"><Card className="p-4 bg-indigo-50 border-indigo-100"><div className="flex items-center gap-2 mb-3 text-indigo-800 font-bold"><Sparkles size={18} /><span>Actions Rapides</span></div><div className="space-y-2"><button onClick={() => handleSend("Bilan de santé global.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Bilan Santé</button><button onClick={() => handleSend("Analyser mes dépenses.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Analyse Dépenses</button></div></Card></div>
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-140px)] animate-in fade-in pb-20 md:pb-0">
+      <div className="lg:col-span-1 space-y-4"><Card className="bg-indigo-50 border-indigo-100"><div className="flex items-center gap-2 mb-3 text-indigo-800 font-bold"><Sparkles size={18} /><span>Actions Rapides</span></div><div className="space-y-2"><button onClick={() => handleSend("Bilan de santé global.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Bilan Santé</button><button onClick={() => handleSend("Analyser mes dépenses.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Analyse Dépenses</button></div></Card></div>
       <div className="lg:col-span-3 flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="bg-slate-50 p-4 border-b border-slate-200"><h3 className="font-bold text-slate-700">Assistant Financier</h3></div><div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>{messages.map((msg, idx) => (<MessageBubble key={idx} message={msg} />))}</div><div className="p-4 bg-white border-t border-slate-100"><form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2"><input type="text" value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 p-3 border border-slate-300 rounded-lg" disabled={isLoading} /><Button variant="magic" disabled={isLoading || !input.trim()}><Send size={18} /></Button></form></div></div>
     </div>
   );
@@ -1442,18 +1443,6 @@ const LoginScreen = ({ onLogin, onEmailLogin, onEmailRegister, onGoogleLogin, on
             </button>
           )}
         </div>
-
-        {view === 'login' && (
-          <>
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-              <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-slate-500">Options développeur</span></div>
-            </div>
-            <button onClick={() => onLogin().catch(e => setError(e.message))} className="w-full bg-slate-100 text-slate-600 font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors">
-              <User size={18} /> Mode Invité (Données volatiles)
-            </button>
-          </>
-        )}
       </Card>
     </div>
   );
@@ -1862,7 +1851,7 @@ export default function App() {
     />;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20">
+    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 md:pb-0">
       
       {/* INACTIVITY MODAL */}
       <InactivityModal 
@@ -1877,16 +1866,51 @@ export default function App() {
         onUpdate={handleUpdateProfile} 
       />
 
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 md:px-8"><div className="max-w-7xl mx-auto h-16 flex items-center justify-between"><div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><TrendingUp size={20} /></div><span className="font-bold text-xl tracking-tight text-slate-800 hidden md:block">MyWealth<span className="text-blue-600">.io</span></span></div><div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">{[{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'assets', label: 'Patrimoine', icon: Wallet }, { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }].map(tab => (<button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}><tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} /><span className="hidden md:inline">{tab.label}</span></button>))}</div><div className="flex items-center gap-3">
-        {userProfile ? (
-             <button onClick={() => setIsProfileModalOpen(true)} className="hidden md:flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
+      {/* TOP NAVIGATION (DESKTOP) */}
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 md:px-8 hidden md:block">
+        <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-2 rounded-lg text-white"><TrendingUp size={20} /></div>
+            <span className="font-bold text-xl tracking-tight text-slate-800">MyWealth<span className="text-blue-600">.io</span></span>
+          </div>
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">
+            {[{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'assets', label: 'Patrimoine', icon: Wallet }, { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}>
+                <tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            {userProfile ? (
+              <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
                 <User size={12} className="text-blue-500"/> {userProfile.firstName}
-             </button>
-        ) : (
-            <div className="hidden md:flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium"><Cloud size={12} /> Sauvegardé</div>
-        )}
-        <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Déconnexion"><LogOut size={20} /></button></div></div></nav>
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium"><Cloud size={12} /> Sauvegardé</div>
+            )}
+            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Déconnexion"><LogOut size={20} /></button>
+          </div>
+        </div>
+      </nav>
+
+      {/* MOBILE TOP BAR */}
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 h-14 flex items-center justify-between md:hidden">
+         <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-1.5 rounded-lg text-white"><TrendingUp size={18} /></div>
+            <span className="font-bold text-lg text-slate-800">MyWealth</span>
+         </div>
+         <div className="flex items-center gap-2">
+            {userProfile && (
+              <button onClick={() => setIsProfileModalOpen(true)} className="p-2 bg-slate-50 rounded-full text-blue-600">
+                <User size={18}/>
+              </button>
+            )}
+            <button onClick={handleLogout} className="p-2 text-slate-400"><LogOut size={18} /></button>
+         </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
         {activeTab === 'dashboard' && <DashboardView assets={assets} transactions={transactions} setActiveTab={setActiveTab} onDeleteTransaction={handleDeleteTransaction} userProfile={userProfile} />}
         {activeTab === 'assets' && <AssetsView assets={assets} setAssets={handleSetAssets} />}
         {activeTab === 'budget' && (
@@ -1900,6 +1924,23 @@ export default function App() {
         )}
         {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} />}
       </main>
+
+      {/* BOTTOM NAVIGATION (MOBILE) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 pb-safe">
+        <div className="flex justify-around items-center h-16">
+          {[{ id: 'dashboard', label: 'Accueil', icon: LayoutDashboard }, { id: 'assets', label: 'Actifs', icon: Wallet }, { id: 'budget', label: 'Budget', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseil', icon: Sparkles, magic: true }].map(tab => (
+            <button 
+              key={tab.id} 
+              onClick={() => setActiveTab(tab.id)} 
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
+            >
+              <tab.icon size={20} className={activeTab === tab.id ? (tab.magic ? "text-indigo-500" : "text-blue-600") : ""} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
