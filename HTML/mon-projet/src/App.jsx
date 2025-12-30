@@ -13,7 +13,8 @@ import {
   LogOut, User, Lock, Mail, AlertCircle, ArrowRight, Cloud,
   Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
   Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase,
-  CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale, Menu
+  CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale, Menu,
+  BarChart2, LineChart as LineChartIcon
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -97,6 +98,19 @@ const CATEGORY_LABELS = {
 const INITIAL_ASSETS = [];
 const INITIAL_TRANSACTIONS = [];
 
+// --- FORMATTING HELPERS ---
+
+// Fonction universelle pour formater les devises avec 2 décimales
+const formatCurrency = (value) => {
+  if (value === undefined || value === null || isNaN(value)) return "0,00 €";
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+};
+
 // --- DATA PROCESSING HELPERS ---
 
 const processHistoryData = (timeRange, currentAssets) => {
@@ -153,7 +167,6 @@ const processFlowData = (timeRange, transactions) => {
     const monthName = date.toLocaleDateString('fr-FR', { month: 'short', year: i > 12 ? '2-digit' : undefined });
     const monthTrans = safeTransactions.filter(t => t.date.startsWith(monthKey));
     
-    // On exclut les transferts des calculs de revenus/dépenses car ce sont des mouvements neutres
     const revenus = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const depenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const solde = revenus - depenses;
@@ -340,7 +353,6 @@ const InactivityModal = ({ isOpen, onStayConnected }) => {
   );
 };
 
-// Modif: p-4 sur mobile, p-6 sur md
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-300 hover:shadow-md transition-all duration-300 p-4 md:p-6 ${className}`}>
     {children}
@@ -526,7 +538,7 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
              {pieData.length > 0 && (
                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0" style={{top: '0'}}>
                  <span className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">{centerSubLabel}</span>
-                 <span className="text-3xl font-extrabold transition-colors duration-200" style={{ color: centerColor }}>{centerValue.toLocaleString()} €</span>
+                 <span className="text-3xl font-extrabold transition-colors duration-200" style={{ color: centerColor }}>{formatCurrency(centerValue)}</span>
                  <span className="text-sm font-bold text-slate-600 mt-1 px-3 py-1 rounded-full bg-slate-50 border border-slate-100 shadow-sm">{centerLabel}</span>
                </div>
              )}
@@ -552,7 +564,7 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
             <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-            <RechartsTooltip cursor={{fill: '#f1f5f9'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} wrapperStyle={{ pointerEvents: 'none' }} />
+            <RechartsTooltip cursor={{fill: '#f1f5f9'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value) => formatCurrency(value)} wrapperStyle={{ pointerEvents: 'none' }} />
             <Bar dataKey="revenus" name="Revenus" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={16} />
             <Bar dataKey="depenses" name="Dépenses (cliquez-moi)" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={16} className="cursor-pointer hover:opacity-80 transition-opacity" onClick={handleExpenseBarClick} />
           </ComposedChart>
@@ -728,7 +740,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
           <>
             <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
               <div><button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2"><Building size={20} className="text-blue-600"/>{asset.name}</h2><p className="text-slate-500 text-xs md:text-sm">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p></div>
-              <div className="text-right"><p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p><p className="text-xl md:text-3xl font-bold text-blue-600">{asset.value.toLocaleString()} €</p></div>
+              <div className="text-right"><p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p><p className="text-xl md:text-3xl font-bold text-blue-600">{formatCurrency(asset.value)}</p></div>
             </div>
             <div className="flex border-b border-slate-100 px-4 md:px-6 overflow-x-auto no-scrollbar">
               {isComposite && <button onClick={() => setActiveTab('composition')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'composition' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><List size={18} /> Composition</button>}
@@ -764,7 +776,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                                 <span className="font-medium text-slate-700 truncate min-w-0">{pos.name}</span>
                             </div>
                             <div className="flex items-center gap-4 flex-shrink-0">
-                                <span className="font-bold text-slate-900">{pos.value.toLocaleString()} €</span>
+                                <span className="font-bold text-slate-900">{formatCurrency(pos.value)}</span>
                                 {/* Utilisation du focus pour mobile et group-hover pour desktop */}
                                 <div className={`${focusedPosId === pos.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
                                     <button onClick={(e) => { e.stopPropagation(); setDeleteConfig({ type: 'position', id: pos.id }); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
@@ -795,9 +807,9 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                   </div>
                   <div className="lg:col-span-2 space-y-6">
                     <Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%"><AreaChart data={assetChartData}><defs><linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAsset)" /></AreaChart></ResponsiveContainer></div></Card>
+                      <ResponsiveContainer width="100%" height="100%"><AreaChart data={assetChartData}><defs><linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip formatter={(value) => formatCurrency(value)} /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAsset)" /></AreaChart></ResponsiveContainer></div></Card>
                     <Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique Global</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
-                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span>{!isComposite && <div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>}</div></div>))}</div></Card>
+                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>{!isComposite && <div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>}</div></div>))}</div></Card>
                   </div>
                 </div>
               )}
@@ -807,8 +819,8 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         )}
         {viewMode === 'position' && selectedPosition && (
           <>
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{selectedPosition.value.toLocaleString()} €</p></div></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div></div>))}</div></Card></div></div></div>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{formatCurrency(selectedPosition.value)}</p></div></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip formatter={(value) => formatCurrency(value)} /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{formatCurrency(point.value)}</span><div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div></div>))}</div></Card></div></div></div>
           </>
         )}
       </div>
@@ -820,7 +832,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const [timeRange, setTimeRange] = useState('6M');
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [viewMode, setViewMode] = useState('net');
+  const [chartMode, setChartMode] = useState('global'); // 'global' (Area) or 'detailed' (StackedBar)
   const [forecast, setForecast] = useState(null);
   const [isForecasting, setIsForecasting] = useState(false);
   const [txAnalysis, setTxAnalysis] = useState(null);
@@ -850,7 +862,6 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     const current = keys.reduce((sum, k) => sum + (data[data.length - 1][k] || 0), 0);
     const previous = keys.reduce((sum, k) => sum + (data[data.length - 2][k] || 0), 0);
     if (previous === 0) return current === 0 ? "0.0" : "100.0";
-    // Correction: Division par la valeur absolue pour gérer correctement le passage de négatif à positif (ou moins négatif)
     return ((current - previous) / Math.abs(previous) * 100).toFixed(1);
   };
 
@@ -893,7 +904,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     } else if (value >= 10000) {
        return (value / 1000).toFixed(0) + ' k€';
     }
-    return value.toLocaleString() + ' €';
+    return formatCurrency(value);
   };
 
   const hasFlowData = useMemo(() => cashflowHistoryData.some(d => d.revenus > 0 || d.depenses > 0), [cashflowHistoryData]);
@@ -908,8 +919,51 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     );
   }
 
-  // --- MODIFICATION ICI : On sort la légende du composant PieChart ---
-  // On ne définit plus 'renderLegend' car on va mapper directement sur 'allocationData' dans le JSX
+  // Configuration du graphique "Global"
+  const renderGlobalChart = () => (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={evolutionData}>
+        <defs>
+          <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.5}/>
+            <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10}/>
+        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
+        <RechartsTooltip 
+          cursor={{stroke: '#cbd5e1', strokeWidth: 1}} 
+          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} 
+          formatter={(value) => [formatCurrency(value), 'Patrimoine Net']}
+        />
+        <Area type="monotone" dataKey="totalNet" stroke="#2563eb" strokeWidth={3} fill="url(#gradTotal)" />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+
+  // Configuration du graphique "Détail"
+  const renderDetailedChart = () => (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={evolutionData} barSize={20}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10}/>
+        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
+        <RechartsTooltip 
+          cursor={{fill: '#f8fafc'}} 
+          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+          formatter={(value, name) => [formatCurrency(value), CATEGORY_LABELS[name] || name]}
+          itemSorter={(item) => -item.value}
+        />
+        <Bar dataKey="liquidite" name={CATEGORY_LABELS.liquidite} stackId="a" fill={COLORS.liquidite} radius={[0, 0, 4, 4]} />
+        <Bar dataKey="investissement" name={CATEGORY_LABELS.investissement} stackId="a" fill={COLORS.investissement} />
+        <Bar dataKey="epargne_salariale" name={CATEGORY_LABELS.epargne_salariale} stackId="a" fill={COLORS.epargne_salariale} />
+        <Bar dataKey="immobilier" name={CATEGORY_LABELS.immobilier} stackId="a" fill={COLORS.immobilier} />
+        <Bar dataKey="crypto" name={CATEGORY_LABELS.crypto} stackId="a" fill={COLORS.crypto} />
+        <Bar dataKey="autre" name={CATEGORY_LABELS.autre} stackId="a" fill={COLORS.autre} radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
    
   return (
     <div className="space-y-6 animate-in fade-in duration-500 text-slate-900 bg-slate-100 min-h-screen p-4 pb-24 md:pb-8">
@@ -921,61 +975,41 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
         <div className="flex gap-2"><Button variant="magic" onClick={handleAnalyzeDashboard} disabled={isAnalyzing} className="text-xs px-3 py-1.5">{isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{isAnalyzing ? "..." : "Analyser"}</Button><div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex">{['6M', '1Y', '5Y', 'ALL'].map(range => (<button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${timeRange === range ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}>{range === 'ALL' ? 'Tout' : range}</button>))}</div></div>
       </div>
       {aiAnalysis && <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 relative mb-4"><button onClick={() => setAiAnalysis(null)} className="absolute top-2 right-2 text-indigo-400"><X size={16} /></button><div className="flex gap-3"><div className="bg-white p-2 rounded-full h-fit text-indigo-600"><Bot size={20} /></div><div className="text-sm text-indigo-900 whitespace-pre-line">{aiAnalysis}</div></div></div>}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${netWorth.toLocaleString()} €`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${investments.toLocaleString()} €`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${liquidities.toLocaleString()} €`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${formatCurrency(netWorth)}`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${formatCurrency(investments)}`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${formatCurrency(liquidities)}`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        <Card className="lg:col-span-2 flex flex-col border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingUp size={20} className="text-blue-600"/> Évolution</h3><div className="bg-slate-100 p-0.5 rounded-lg flex items-center"><button onClick={() => setViewMode('net')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'net' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Net</button><button onClick={() => setViewMode('brut')} className={`px-3 py-1 rounded-md text-xs font-bold ${viewMode === 'brut' ? 'bg-white shadow-sm' : 'text-slate-500'}`}>Brut</button></div></div>
-        <div className="h-72 w-full min-h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={evolutionData}>
-              <defs>
-                <linearGradient id="gradLiq" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.liquidite} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.liquidite} stopOpacity={0}/></linearGradient>
-                <linearGradient id="gradInv" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.investissement} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.investissement} stopOpacity={0}/></linearGradient>
-                <linearGradient id="gradEpargne" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.epargne_salariale} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.epargne_salariale} stopOpacity={0}/></linearGradient>
-                <linearGradient id="gradImmo" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.immobilier} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.immobilier} stopOpacity={0}/></linearGradient>
-                <linearGradient id="gradCrypto" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.crypto} stopOpacity={0.8}/><stop offset="95%" stopColor={COLORS.crypto} stopOpacity={0}/></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-              <RechartsTooltip />
-              <Legend />
-              {viewMode === 'net' ? (
-                  <>
-                    <Area type="monotone" dataKey="autre" stackId="1" stroke={COLORS.autre} fill={COLORS.autre} />
-                    <Area type="monotone" dataKey="crypto" stackId="1" stroke={COLORS.crypto} fill="url(#gradCrypto)" />
-                    <Area type="monotone" dataKey="immobilier" stackId="1" stroke={COLORS.immobilier} fill="url(#gradImmo)" />
-                    <Area type="monotone" dataKey="epargne_salariale" stackId="1" stroke={COLORS.epargne_salariale} fill="url(#gradEpargne)" />
-                    <Area type="monotone" dataKey="investissement" stackId="1" stroke={COLORS.investissement} fill="url(#gradInv)" />
-                    <Area type="monotone" dataKey="liquidite" stackId="1" stroke={COLORS.liquidite} fill="url(#gradLiq)" />
-                  </>
-                ) : (
-                  <>
-                    <Area type="monotone" dataKey="dette" name="Passif (Dette)" stackId="2" stroke="#ef4444" fill="#fee2e2" strokeDasharray="5 5" />
-                    <Area type="monotone" dataKey="liquidite" stackId="1" stroke={COLORS.liquidite} fill="url(#gradLiq)" />
-                    <Area type="monotone" dataKey="investissement" stackId="1" stroke={COLORS.investissement} fill="url(#gradInv)" />
-                    <Area type="monotone" dataKey="epargne_salariale" stackId="1" stroke={COLORS.epargne_salariale} fill="url(#gradEpargne)" />
-                    <Area type="monotone" dataKey="immobilier" stackId="1" stroke={COLORS.immobilier} fill="url(#gradImmo)" />
-                    <Area type="monotone" dataKey="crypto" stackId="1" stroke={COLORS.crypto} fill="url(#gradCrypto)" />
-                    <Area type="monotone" dataKey="autre" stackId="1" stroke={COLORS.autre} fill={COLORS.autre} />
-                  </>
-                )}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <Card className="lg:col-span-2 flex flex-col border-slate-300 min-h-[400px]">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><TrendingUp size={20} className="text-blue-600"/> Évolution du Patrimoine</h3>
+            <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200">
+                <button 
+                  onClick={() => setChartMode('global')} 
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${chartMode === 'global' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <LineChartIcon size={14} /> Global
+                </button>
+                <button 
+                  onClick={() => setChartMode('detailed')} 
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${chartMode === 'detailed' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <BarChart2 size={14} /> Détail
+                </button>
+            </div>
+          </div>
+          <div className="flex-1 w-full min-h-[300px]">
+             {chartMode === 'global' ? renderGlobalChart() : renderDetailedChart()}
+          </div>
         </Card>
         
-        {/* CORRECTIF CRITIQUE: On sort la légende du PieChart pour avoir un contrôle total en HTML/CSS */}
         <Card className="border-slate-300 flex flex-col justify-center relative">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3>
             
             <div className="h-64 w-full relative mt-4 min-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                        {/* On enlève <Legend /> d'ici */}
                         <Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                             {allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}
                         </Pie>
-                        <RechartsTooltip />
+                        <RechartsTooltip formatter={(value) => formatCurrency(value)} />
                     </PieChart>
                 </ResponsiveContainer>
                 {/* Center Text */}
@@ -1005,7 +1039,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Revenus & Dépenses</h3>
                 <Button variant="magic" onClick={handleForecast} disabled={isForecasting} className="text-xs px-2 py-1 h-8">{isForecasting ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />} Prévision</Button>
             </div>
-            {forecast && <div className="absolute top-16 left-6 right-6 z-20 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-indigo-100 shadow-lg"><div className="flex justify-between"><h4 className="font-bold text-indigo-900">Prévision IA</h4><button onClick={() => setForecast(null)}><X size={16}/></button></div><div className="grid grid-cols-3 gap-4 mb-3 text-center"><div className="p-2 bg-green-50 rounded-lg"><p className="text-xs text-green-700">Revenus</p><p className="font-bold">{forecast.revenus}€</p></div><div className="p-2 bg-red-50 rounded-lg"><p className="text-xs text-red-700">Dépenses</p><p className="font-bold">{forecast.depenses}€</p></div></div><p className="text-xs text-slate-600 italic">{forecast.conseil}</p></div>}
+            {forecast && <div className="absolute top-16 left-6 right-6 z-20 bg-white/90 backdrop-blur-md p-4 rounded-xl border border-indigo-100 shadow-lg"><div className="flex justify-between"><h4 className="font-bold text-indigo-900">Prévision IA</h4><button onClick={() => setForecast(null)}><X size={16}/></button></div><div className="grid grid-cols-3 gap-4 mb-3 text-center"><div className="p-2 bg-green-50 rounded-lg"><p className="text-xs text-green-700">Revenus</p><p className="font-bold">{formatCurrency(forecast.revenus)}</p></div><div className="p-2 bg-red-50 rounded-lg"><p className="text-xs text-red-700">Dépenses</p><p className="font-bold">{formatCurrency(forecast.depenses)}</p></div></div><p className="text-xs text-slate-600 italic">{forecast.conseil}</p></div>}
             
             <InteractiveBudgetChart 
                 cashflowData={cashflowHistoryData} 
@@ -1019,7 +1053,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group cursor-pointer"
                 onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
             >
-                <div className="flex items-center gap-3 overflow-hidden min-w-0"><div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div className="min-w-0 truncate"><p className="font-medium text-slate-800 truncate">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3 flex-shrink-0"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span>
+                <div className="flex items-center gap-3 overflow-hidden min-w-0"><div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div className="min-w-0 truncate"><p className="font-medium text-slate-800 truncate">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3 flex-shrink-0"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}</span>
                 {/* Modif ici: utilisation de focusedTxId pour mobile */}
                 <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
                     <button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
@@ -1068,13 +1102,13 @@ const AssetsView = ({ assets, setAssets }) => {
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
         </Card>
       )}
-      <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{groupedAssets[type].reduce((sum, a) => sum + a.value, 0).toLocaleString()} €</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
+      <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{formatCurrency(groupedAssets[type].reduce((sum, a) => sum + a.value, 0))}</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
         <div 
           key={asset.id} 
           className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
           onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
         >
-          <div className="flex items-center gap-4 overflow-hidden min-w-0"><div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0"><Building size={20} /></div><div className="min-w-0 truncate"><p className="font-semibold text-slate-800 truncate">{asset.name}</p><p className="text-sm text-slate-500 truncate">{asset.institution}</p></div></div><div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{asset.value.toLocaleString()} €</span>
+          <div className="flex items-center gap-4 overflow-hidden min-w-0"><div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0"><Building size={20} /></div><div className="min-w-0 truncate"><p className="font-semibold text-slate-800 truncate">{asset.name}</p><p className="text-sm text-slate-500 truncate">{asset.institution}</p></div></div><div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{formatCurrency(asset.value)}</span>
           {/* Modif ici: utilisation de focusedAssetId pour mobile et group-hover pour desktop */}
           <div className={`${focusedAssetId === asset.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
             <button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
@@ -1274,7 +1308,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
-                    {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €
+                    {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
                   </span>
                   {/* Modif ici: utilisation de focusedTxId pour mobile */}
                   <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
