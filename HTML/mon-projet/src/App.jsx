@@ -153,6 +153,7 @@ const processFlowData = (timeRange, transactions) => {
     const monthName = date.toLocaleDateString('fr-FR', { month: 'short', year: i > 12 ? '2-digit' : undefined });
     const monthTrans = safeTransactions.filter(t => t.date.startsWith(monthKey));
     
+    // On exclut les transferts des calculs de revenus/dépenses car ce sont des mouvements neutres
     const revenus = monthTrans.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const depenses = monthTrans.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
     const solde = revenus - depenses;
@@ -514,7 +515,7 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
              ) : (
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={4} dataKey="value" label={renderCustomizedLabel} labelLine={false} onMouseEnter={onPieEnter} onMouseLeave={onPieLeave} animationDuration={800}>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={4} dataKey="value" label={renderCustomizedLabel} labelLine={false} onMouseEnter={onPieEnter} onMouseLeave={onPieEnter} animationDuration={800}>
                       {pieData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={EXPENSE_CATEGORIES[entry.name]?.color || EXPENSE_CATEGORIES['Autre'].color} stroke="none" opacity={activeIndex === -1 || activeIndex === index ? 1 : 0.3} style={{ transition: 'opacity 0.2s ease', outline: 'none' }}/>
                       ))}
@@ -530,13 +531,13 @@ const InteractiveBudgetChart = ({ cashflowData, transactions, hasFlowData }) => 
                </div>
              )}
            </div>
-           <div className="mt-4 flex flex-wrap justify-center gap-2 px-2 overflow-y-auto max-h-[80px]">
+           <div className="mt-4 flex flex-wrap justify-center gap-2 px-2 overflow-y-auto max-h-24 no-scrollbar">
               {pieData.map((entry, index) => {
                   const CatIcon = EXPENSE_CATEGORIES[entry.name]?.icon || Circle;
                   const color = EXPENSE_CATEGORIES[entry.name]?.color || '#94a3b8';
                   const isHovered = activeIndex === index;
                   return (
-                    <div key={entry.name} onMouseEnter={() => onPieEnter(null, index)} onMouseLeave={onPieLeave} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer ${isHovered ? 'bg-slate-100 border-slate-300 scale-105' : 'bg-white border-slate-100'}`}>
+                    <div key={entry.name} onMouseEnter={() => onPieEnter(null, index)} onMouseLeave={onPieLeave} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer flex-shrink-0 ${isHovered ? 'bg-slate-100 border-slate-300 scale-105' : 'bg-white border-slate-100'}`}>
                         <div className="p-1 rounded-full" style={{ backgroundColor: color + '20', color: color }}><CatIcon size={10} /></div>
                         <span className="text-[10px] font-semibold text-slate-700">{entry.name}</span>
                         <span className="text-[10px] text-slate-500">{totalExpenses > 0 ? Math.round((entry.value / totalExpenses) * 100) : 0}%</span>
@@ -576,6 +577,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState(null); 
+  const [focusedPosId, setFocusedPosId] = useState(null);
 
   useEffect(() => {
     if (selectedPosition) {
@@ -721,7 +723,6 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
       <ConfirmationModal isOpen={!!deleteConfig} onClose={() => setDeleteConfig(null)} onConfirm={executeDelete} />
-      {/* Full screen on mobile, rounded card on desktop */}
       <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
         {viewMode === 'asset' && (
           <>
@@ -746,10 +747,29 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                     <div className="divide-y divide-slate-100 overflow-y-auto max-h-[400px]">
                       {(!asset.positions || asset.positions.length === 0) ? (<div className="p-10 text-center text-slate-400">Aucune ligne.</div>) : (
                         asset.positions.map(pos => (
-                          <div key={pos.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition group cursor-pointer border-b border-slate-50 last:border-0" onClick={() => { setSelectedPosition(pos); setViewMode('position'); }}>
-                            <span className="font-medium text-slate-700">{pos.name}</span>
-                            <div className="flex items-center gap-4"><span className="font-bold text-slate-900">{pos.value.toLocaleString()} €</span>
-                            <button onClick={(e) => { e.stopPropagation(); setDeleteConfig({ type: 'position', id: pos.id }); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button></div>
+                          <div 
+                            key={pos.id} 
+                            className="p-4 flex items-center justify-between hover:bg-slate-50 transition group cursor-pointer border-b border-slate-50 last:border-0" 
+                            onClick={(e) => { 
+                                // Si on est sur mobile, on focus d'abord
+                                if (window.innerWidth < 768 && focusedPosId !== pos.id) {
+                                    setFocusedPosId(pos.id);
+                                    return;
+                                }
+                                setSelectedPosition(pos); 
+                                setViewMode('position'); 
+                            }}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                                <span className="font-medium text-slate-700 truncate min-w-0">{pos.name}</span>
+                            </div>
+                            <div className="flex items-center gap-4 flex-shrink-0">
+                                <span className="font-bold text-slate-900">{pos.value.toLocaleString()} €</span>
+                                {/* Utilisation du focus pour mobile et group-hover pour desktop */}
+                                <div className={`${focusedPosId === pos.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+                                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfig({ type: 'position', id: pos.id }); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
+                                </div>
+                            </div>
                           </div>
                         ))
                       )}
@@ -777,7 +797,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
                     <Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%"><AreaChart data={assetChartData}><defs><linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAsset)" /></AreaChart></ResponsiveContainer></div></Card>
                     <Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique Global</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
-                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span>{!isComposite && <button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>}</div></div>))}</div></Card>
+                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span>{!isComposite && <div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>}</div></div>))}</div></Card>
                   </div>
                 </div>
               )}
@@ -788,7 +808,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         {viewMode === 'position' && selectedPosition && (
           <>
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{selectedPosition.value.toLocaleString()} €</p></div></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div>))}</div></Card></div></div></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{point.value.toLocaleString()} €</span><div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div></div>))}</div></Card></div></div></div>
           </>
         )}
       </div>
@@ -806,12 +826,13 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const [txAnalysis, setTxAnalysis] = useState(null);
   const [isTxAnalyzing, setIsTxAnalyzing] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [focusedTxId, setFocusedTxId] = useState(null);
 
   const evolutionData = useMemo(() => processHistoryData(timeRange, assets), [timeRange, assets]);
   const cashflowHistoryData = useMemo(() => processFlowData(timeRange, transactions), [timeRange, transactions]);
 
   const netWorth = assets ? assets.reduce((acc, item) => acc + item.value, 0) : 0;
-  
+   
   const liquidities = assets ? assets.filter(a => a.type === 'liquidite').reduce((acc, a) => acc + a.value, 0) : 0;
   const investments = assets ? assets.filter(a => ['investissement', 'crypto', 'immobilier', 'epargne_salariale'].includes(a.type)).reduce((acc, a) => acc + a.value, 0) : 0;
 
@@ -887,24 +908,9 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     );
   }
 
-  // CUSTOM TOOLTIP FOR PIE CHART LEGEND PERCENTAGE
-  const renderLegend = (props) => {
-    const { payload } = props;
-    return (
-      <ul className="flex flex-wrap justify-center gap-3 mt-4 text-xs">
-        {payload.map((entry, index) => (
-          <li key={`item-${index}`} className="flex items-center gap-1.5">
-             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-             <span className="text-slate-600">{entry.value}</span>
-             <span className="font-bold text-slate-800">
-               {netWorth > 0 ? ((entry.payload.value / netWorth) * 100).toFixed(0) + '%' : '0%'}
-             </span>
-          </li>
-        ))}
-      </ul>
-    );
-  };
-
+  // --- MODIFICATION ICI : On sort la légende du composant PieChart ---
+  // On ne définit plus 'renderLegend' car on va mapper directement sur 'allocationData' dans le JSX
+   
   return (
     <div className="space-y-6 animate-in fade-in duration-500 text-slate-900 bg-slate-100 min-h-screen p-4 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
@@ -957,7 +963,41 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
           </ResponsiveContainer>
         </div>
         </Card>
-        <Card className="border-slate-300 flex flex-col justify-center relative"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3><div className="h-64 w-full relative mt-4 min-h-[250px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}</Pie><RechartsTooltip /><Legend content={renderLegend} verticalAlign="bottom" height={36}/></PieChart></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}><span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span><span className="text-xs text-slate-500">Total</span></div></div></Card>
+        
+        {/* CORRECTIF CRITIQUE: On sort la légende du PieChart pour avoir un contrôle total en HTML/CSS */}
+        <Card className="border-slate-300 flex flex-col justify-center relative">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 absolute top-6 left-6"><PieIcon size={20} className="text-blue-600"/>Répartition</h3>
+            
+            <div className="h-64 w-full relative mt-4 min-h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        {/* On enlève <Legend /> d'ici */}
+                        <Pie data={allocationData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                            {allocationData.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[entry.type] || '#cbd5e1'} stroke="none" />))}
+                        </Pie>
+                        <RechartsTooltip />
+                    </PieChart>
+                </ResponsiveContainer>
+                {/* Center Text */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col z-0" style={{top: '-15px'}}>
+                    <span className="text-2xl font-bold text-slate-800">{formatWealth(netWorth)}</span>
+                    <span className="text-xs text-slate-500">Total</span>
+                </div>
+            </div>
+
+            {/* Légende HTML customisée, hors du SVG, avec scroll si nécessaire */}
+            <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs max-h-24 overflow-y-auto no-scrollbar px-2">
+                {allocationData.map((entry, index) => (
+                    <div key={`legend-${index}`} className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[entry.type] || '#cbd5e1' }} />
+                        <span className="text-slate-600 truncate max-w-[100px]">{entry.name}</span>
+                        <span className="font-bold text-slate-800">
+                            {netWorth > 0 ? ((entry.value / netWorth) * 100).toFixed(0) + '%' : '0%'}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </Card>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Card className="relative border-slate-300">
@@ -973,7 +1013,18 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 hasFlowData={hasFlowData} 
             />
         </Card>
-        <Card className="flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (<div key={t.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group"><div className="flex items-center gap-3"><div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div><p className="font-medium text-slate-800">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span><button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"><Trash2 size={16} /></button></div></div>))}</div></div></Card>
+        <Card className="flex flex-col relative border-slate-300"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><List size={20} className="text-blue-600"/> Dernières Opérations</h3><Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-2 py-1 h-8">{isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser</Button></div>{txAnalysis && <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-indigo-900 relative"><button onClick={() => setTxAnalysis(null)} className="absolute top-1 right-1 text-indigo-400"><X size={14}/></button><strong>Analyse:</strong> {txAnalysis}</div>}<div className="flex-1 overflow-y-auto"><div className="space-y-3">{(!transactions || transactions.length === 0) ? <div className="p-10 text-center text-slate-400">Aucune opération</div> : transactions.slice(0, 5).map(t => (
+            <div 
+                key={t.id} 
+                className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-100 last:border-0 group cursor-pointer"
+                onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
+            >
+                <div className="flex items-center gap-3 overflow-hidden min-w-0"><div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}</div><div className="min-w-0 truncate"><p className="font-medium text-slate-800 truncate">{t.label}</p><div className="flex gap-2 items-center"><p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>{t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}</div></div></div><div className="flex items-center gap-3 flex-shrink-0"><span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>{t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €</span>
+                {/* Modif ici: utilisation de focusedTxId pour mobile */}
+                <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+                    <button onClick={() => setTransactionToDelete(t.id)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
+                </div></div>
+            </div>))}</div></div></Card>
       </div>
     </div>
   );
@@ -986,6 +1037,7 @@ const AssetsView = ({ assets, setAssets }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [assetToDelete, setAssetToDelete] = useState(null);
+  const [focusedAssetId, setFocusedAssetId] = useState(null);
 
   const isCompositeType = (type) => ['investissement', 'crypto', 'immobilier', 'autre', 'epargne_salariale'].includes(type);
 
@@ -1017,8 +1069,16 @@ const AssetsView = ({ assets, setAssets }) => {
         </Card>
       )}
       <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{groupedAssets[type].reduce((sum, a) => sum + a.value, 0).toLocaleString()} €</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
-        <div key={asset.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0">
-          <div className="flex items-center gap-4"><div className="bg-slate-100 p-2 rounded-lg text-slate-500"><Building size={20} /></div><div><p className="font-semibold text-slate-800">{asset.name}</p><p className="text-sm text-slate-500">{asset.institution}</p></div></div><div className="flex items-center gap-4"><span className="font-bold text-slate-700">{asset.value.toLocaleString()} €</span><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button></div></div>
+        <div 
+          key={asset.id} 
+          className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
+          onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
+        >
+          <div className="flex items-center gap-4 overflow-hidden min-w-0"><div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0"><Building size={20} /></div><div className="min-w-0 truncate"><p className="font-semibold text-slate-800 truncate">{asset.name}</p><p className="text-sm text-slate-500 truncate">{asset.institution}</p></div></div><div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{asset.value.toLocaleString()} €</span>
+          {/* Modif ici: utilisation de focusedAssetId pour mobile et group-hover pour desktop */}
+          <div className={`${focusedAssetId === asset.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+            <button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
+          </div></div>
         </div>
       ))}</div></Card>))}</div>
     </div>
@@ -1034,6 +1094,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [editId, setEditId] = useState(null);
   const [timeRange, setTimeRange] = useState('6M');
+  const [focusedTxId, setFocusedTxId] = useState(null);
 
   const cashflowHistoryData = useMemo(() => processFlowData(timeRange, transactions), [timeRange, transactions]);
   const liquidAssets = useMemo(() => assets ? assets.filter(a => a.type === 'liquidite') : [], [assets]);
@@ -1194,26 +1255,31 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
           </div>
           <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">
             {transactions.map(t => (
-              <div key={t.id} className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+              <div 
+                key={t.id} 
+                className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group cursor-pointer ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
+                onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
+              >
+                <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                  <div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
                     {t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-800">{t.label}</p>
+                  <div className="min-w-0 truncate">
+                    <p className="font-medium text-slate-800 truncate">{t.label}</p>
                     <div className="flex gap-2 items-center">
                       <p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
                       {t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   <span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
                     {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{t.amount.toLocaleString()} €
                   </span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(t)} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Modifier"><Edit size={16} /></button>
-                    <button onClick={() => setTransactionToDelete(t.id)} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
+                  {/* Modif ici: utilisation de focusedTxId pour mobile */}
+                  <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+                    <button onClick={(e) => { e.stopPropagation(); startEdit(t); }} className="p-1 text-slate-400 hover:text-blue-600 transition-colors" title="Modifier"><Edit size={16} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); setTransactionToDelete(t.id); }} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Supprimer"><Trash2 size={16} /></button>
                   </div>
                 </div>
               </div>
