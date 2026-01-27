@@ -1657,9 +1657,12 @@ export default function App() {
     const unsubAssets = onSnapshot(
       doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'assets'), 
       (docSnapshot) => { 
-        if (docSnapshot.exists()) setAssets(docSnapshot.data().items || []); 
-        else saveAssets(INITIAL_ASSETS); // Init empty if new
-      },
+        if (docSnapshot.exists()) {setAssets(docSnapshot.data().items || []); 
+      }
+	  else {
+        setAssets([]); 
+      }
+    },
       (error) => {
         console.error("Erreur lecture Assets:", error);
         alert("Erreur de connexion aux données (Assets). Vérifiez vos droits d'accès.");
@@ -1670,7 +1673,7 @@ export default function App() {
       doc(db, 'artifacts', appId, 'users', user.uid, 'data', 'transactions'), 
       (docSnapshot) => { 
         if (docSnapshot.exists()) setTransactions(docSnapshot.data().items || []); 
-        else saveTransactions([]); 
+        else setTransactions([]); 
       },
       (error) => {
         console.error("Erreur lecture Transactions:", error);
