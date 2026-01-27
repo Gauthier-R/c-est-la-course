@@ -909,12 +909,24 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
 
   const hasFlowData = useMemo(() => cashflowHistoryData.some(d => d.revenus > 0 || d.depenses > 0), [cashflowHistoryData]);
 
-  if (!assets || assets.length === 0) {
+  // --- ÉTAPE A : Chargement initial ---
+  // Si assets est strictement null, on affiche le loader pour éviter le clignotement
+  if (assets === null || transactions === null) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    );
+  }
+
+  // --- ÉTAPE B : Compte réellement vide ---
+  // Si assets est un tableau vide [], c'est que Firebase a répondu "rien trouvé"
+  if (assets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 animate-in fade-in">
-         <div className="p-6 bg-white rounded-full shadow-lg text-blue-600 mb-2"><TrendingUp size={48} /></div>
-         <h2 className="text-2xl font-bold text-slate-800">Bienvenue {userProfile?.firstName || ''} sur votre Tableau de Bord</h2>
-         <Button onClick={() => setActiveTab('assets')} className="shadow-lg hover:scale-105 transition-transform">Commencer maintenant <ArrowRight size={18} /></Button>
+        <div className="p-6 bg-white rounded-full shadow-lg text-blue-600 mb-2"><TrendingUp size={48} /></div>
+        <h2 className="text-2xl font-bold text-slate-800">Bienvenue {userProfile?.firstName || ''} sur votre Tableau de Bord</h2>
+        <Button onClick={() => setActiveTab('assets')} className="shadow-lg hover:scale-105 transition-transform">Commencer maintenant <ArrowRight size={18} /></Button>
       </div>
     );
   }
@@ -1067,6 +1079,10 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
 // ... AssetsView, BudgetView, AiAdvisorView remain largely the same, skipped for brevity but would be here ...
 
 const AssetsView = ({ assets, setAssets }) => {
+  // Ajoutez ceci au tout début :
+  if (assets === null) {
+    return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
+  }
   const [newAsset, setNewAsset] = useState({ name: '', institution: '', value: '', type: 'liquidite' });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -1120,6 +1136,9 @@ const AssetsView = ({ assets, setAssets }) => {
 };
 
 const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransaction, onUpdateTransaction }) => {
+  if (transactions === null || assets === null) {
+    return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
+  }
   const [newTrans, setNewTrans] = useState({ date: new Date().toISOString().split('T')[0], label: '', amount: '', type: 'expense', category: 'Autre' });
   const [selectedAccount, setSelectedAccount] = useState('');
   const [transferTo, setTransferTo] = useState('');
@@ -1326,6 +1345,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
 };
 
 const AiAdvisorView = ({ assets, transactions }) => {
+  if (assets === null || transactions === null) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
   const [messages, setMessages] = useState([{ role: 'assistant', content: "Bonjour ! Je suis votre conseiller financier intelligent." }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -1552,8 +1572,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [assets, setAssets] = useState(INITIAL_ASSETS);
-  const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
+  const [assets, setAssets] = useState(null);
+  const [transactions, setTransactions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
