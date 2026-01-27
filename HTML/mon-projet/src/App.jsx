@@ -17,6 +17,8 @@ import {
   BarChart2, LineChart as LineChartIcon
 } from 'lucide-react';
 
+import emailjs from '@emailjs/browser';
+
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
@@ -221,16 +223,18 @@ const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message }) => {
   );
 };
 
-const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
+const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transactions, onRestore }) => {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     birthDate: '',
     monthlyIncome: '',
     financialGoal: 'freedom',
-    riskProfile: 'balanced'
+    riskProfile: 'balanced',
+    emailReports: false
   });
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && userProfile) {
@@ -240,22 +244,52 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
         birthDate: userProfile.birthDate || '',
         monthlyIncome: userProfile.monthlyIncome || '',
         financialGoal: userProfile.financialGoal || 'freedom',
-        riskProfile: userProfile.riskProfile || 'balanced'
+        riskProfile: userProfile.riskProfile || 'balanced',
+        emailReports: userProfile.emailReports || false
       });
     }
   }, [isOpen, userProfile]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    await onUpdate(formData);
-    setLoading(false);
-    onClose();
+  const handleExport = () => {
+    const dataToExport = {
+      version: "1.0",
+      exportDate: new Date().toISOString(),
+      profile: userProfile,
+      assets: assets,
+      transactions: transactions
+    };
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup_wealth_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        if (window.confirm("Voulez-vous vraiment restaurer ces données ? Cela remplacera votre patrimoine et vos transactions actuels.")) {
+          onRestore(json);
+        }
+      } catch (err) {
+        alert("Fichier invalide.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   if (!isOpen) return null;
@@ -267,62 +301,83 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate }) => {
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Mon Profil</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full"><X size={20}/></button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-5">
+
+        <form onSubmit={(e) => { e.preventDefault(); onUpdate(formData); onClose(); }} className="space-y-5">
+            {/* IDENTITÉ */}
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Prénom</label>
-                    <input type="text" name="firstName" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.firstName} onChange={handleChange} required />
+                    <input type="text" name="firstName" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none" value={formData.firstName} onChange={handleChange} required />
                 </div>
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label>
-                    <input type="text" name="lastName" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.lastName} onChange={handleChange} required />
+                    <input type="text" name="lastName" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none" value={formData.lastName} onChange={handleChange} required />
                 </div>
             </div>
 
+            {/* DONNÉES FINANCIÈRES (ORIGINALES) */}
             <div className="border-t border-slate-100 pt-4">
                 <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2"><Activity size={16}/> Données Financières</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Date de naissance</label>
-                        <input type="date" name="birthDate" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.birthDate} onChange={handleChange} />
+                        <input type="date" name="birthDate" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none" value={formData.birthDate} onChange={handleChange} />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Revenu Mensuel Net (€)</label>
-                        <input type="number" name="monthlyIncome" className="w-full p-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ex: 2500" value={formData.monthlyIncome} onChange={handleChange} />
+                        <input type="number" name="monthlyIncome" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none" value={formData.monthlyIncome} onChange={handleChange} />
                     </div>
                 </div>
                 
                 <div className="mb-4">
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Objectif Principal</label>
-                    <div className="relative">
-                        <Target size={16} className="absolute left-3 top-3 text-slate-400" />
-                        <select name="financialGoal" className="w-full p-2.5 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white" value={formData.financialGoal} onChange={handleChange}>
-                            <option value="freedom">Liberté Financière / FIRE</option>
-                            <option value="retirement">Préparer sa retraite</option>
-                            <option value="real_estate">Achat Immobilier</option>
-                            <option value="safety">Épargne de précaution</option>
-                            <option value="growth">Croissance du capital</option>
-                            <option value="other">Autre</option>
-                        </select>
-                    </div>
+                    <select name="financialGoal" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white" value={formData.financialGoal} onChange={handleChange}>
+                        <option value="freedom">Liberté Financière / FIRE</option>
+                        <option value="retirement">Préparer sa retraite</option>
+                        <option value="real_estate">Achat Immobilier</option>
+                        <option value="safety">Épargne de précaution</option>
+                        <option value="growth">Croissance du capital</option>
+                        <option value="other">Autre</option>
+                    </select>
                 </div>
 
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Profil de Risque</label>
-                    <div className="relative">
-                        <Scale size={16} className="absolute left-3 top-3 text-slate-400" />
-                        <select name="riskProfile" className="w-full p-2.5 pl-10 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white" value={formData.riskProfile} onChange={handleChange}>
-                            <option value="prudent">Prudent (Sécurité avant tout)</option>
-                            <option value="balanced">Équilibré (Risque modéré)</option>
-                            <option value="dynamic">Dynamique (Performance max)</option>
-                        </select>
-                    </div>
+                    <select name="riskProfile" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white" value={formData.riskProfile} onChange={handleChange}>
+                        <option value="prudent">Prudent (Sécurité avant tout)</option>
+                        <option value="balanced">Équilibré (Risque modéré)</option>
+                        <option value="dynamic">Dynamique (Performance max)</option>
+                    </select>
                 </div>
             </div>
 
-            <div className="flex gap-3 justify-end mt-8 border-t border-slate-100 pt-4">
+            {/* SÉCURITÉ & BACKUP (NOUVEAU) */}
+            <div className="border-t border-slate-100 pt-4">
+                <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2"><ShieldCheck size={18} className="text-green-600"/> Sécurité & Sauvegarde</h4>
+                
+                <div className="flex items-start gap-3 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <input type="checkbox" id="emailReports" name="emailReports" checked={formData.emailReports} onChange={handleChange} className="mt-1 w-4 h-4 text-blue-600 rounded" />
+                    <label htmlFor="emailReports" className="text-[11px] text-blue-900 font-medium leading-tight">
+                        Recevoir un rapport d'analyse mensuel (inclut une sauvegarde automatique de vos données).
+                    </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={handleExport} className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all group">
+                        <Save size={20} className="text-blue-500 group-hover:scale-110 transition-transform mb-1"/>
+                        <span className="text-[10px] font-bold uppercase text-blue-600">Exporter JSON</span>
+                    </button>
+                    <button type="button" onClick={() => fileInputRef.current.click()} className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all group">
+                        <Cloud size={20} className="text-slate-400 group-hover:text-indigo-600 mb-1"/>
+                        <span className="text-[10px] font-bold uppercase text-slate-500">Importer</span>
+                    </button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileChange} />
+                </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-4 border-t border-slate-100 pt-4">
                 <Button variant="secondary" onClick={onClose} type="button">Annuler</Button>
-                <Button type="submit" disabled={loading}>{loading ? <Loader2 className="animate-spin" size={18}/> : "Enregistrer"}</Button>
+                <Button type="submit" disabled={loading}>Enregistrer</Button>
             </div>
         </form>
       </div>
@@ -1642,10 +1697,20 @@ export default function App() {
       if (currentUser) {
          // Load User Profile Data (Name/Surname)
          try {
-             const profileDoc = await getDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info'));
-             if (profileDoc.exists()) {
-                 setUserProfile(profileDoc.data());
-             } else {
+         const profileDoc = await getDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info'));
+         if (profileDoc.exists()) {
+             const data = profileDoc.data();
+             setUserProfile(data);
+
+             // --- LOGIQUE MENSUELLE (BIEN PLACÉE ICI) ---
+             const lastReport = data.lastMonthlyReportDate;
+             const today = new Date();
+             const currentMonthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+             
+             if (data.emailReports && lastReport !== currentMonthKey) {
+                 triggerMonthlyProcess(currentUser, data, currentMonthKey);
+             }
+         } else {
                  // Try to init profile from Auth provider data (e.g. Google)
                  if (currentUser.displayName) {
                      const names = currentUser.displayName.split(' ');
@@ -1963,6 +2028,78 @@ export default function App() {
     }
   };
 
+  const handleRestoreBackup = async (backupData) => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      // 1. Restaurer les Assets [cite: 412]
+      if (backupData.assets) {
+        await handleSetAssets(backupData.assets);
+      }
+      // 2. Restaurer les Transactions [cite: 412]
+      if (backupData.transactions) {
+        await handleSetTransactions(backupData.transactions);
+      }
+      // 3. Restaurer le profil si présent 
+      if (backupData.profile) {
+        await handleUpdateProfile(backupData.profile);
+      }
+      alert("Restauration terminée avec succès !");
+    } catch (error) {
+      console.error("Erreur lors de la restauration:", error);
+      alert("Une erreur est survenue lors de la restauration.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerMonthlyProcess = async (currentUser, profile, monthKey) => {
+    console.log("Démarrage du rapport mensuel...");
+
+    // 1. Demander à l'IA un résumé de santé financière
+    const aiSummary = await callGeminiAPI(
+      "Tu es un expert financier. Analyse ces données et fais un résumé très court (10 lignes max) des progrès du mois.",
+      `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions du mois: ${JSON.stringify(transactions?.slice(0,10))}`
+    );
+
+    // 2. Préparer les données de sauvegarde
+    const backupJSON = JSON.stringify({
+      assets: assets,
+      transactions: transactions,
+      profile: profile,
+      date: monthKey
+    });
+
+    // 3. Envoyer l'e-mail via EmailJS
+    try {
+      // Initialise avec ta clé publique EmailJS
+      emailjs.init("OvBeXwPPROzqE2kQL"); 
+
+      await emailjs.send("service_htd01wn", "template_ac5mdxf", {
+        to_email: profile.email || currentUser.email,
+        user_name: profile.firstName,
+        month: monthKey,
+        report_content: aiSummary,
+        backup_data: backupJSON // On envoie le JSON brut dans le corps du mail
+      });
+
+      // 4. Téléchargement de secours automatique (ton code actuel) [cite: 412]
+      const blob = new Blob([backupJSON], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Wealth_Backup_${monthKey}.json`;
+      link.click();
+
+      // 5. Marquer comme fait en base de données pour ne pas boucler
+      await handleUpdateProfile({ lastMonthlyReportDate: monthKey });
+      
+      alert("Votre rapport mensuel et votre sauvegarde ont été générés !");
+    } catch (error) {
+      console.error("Erreur EmailJS:", error);
+    }
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50"><Loader2 className="animate-spin" /></div>;
   
   if (!user) return <LoginScreen 
@@ -1987,6 +2124,15 @@ export default function App() {
         onClose={() => setIsProfileModalOpen(false)} 
         userProfile={userProfile} 
         onUpdate={handleUpdateProfile} 
+        assets={assets}                 
+        transactions={transactions}     
+        onRestore={handleRestoreBackup}
+        onSendReport={() => {
+        const today = new Date();
+        const monthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+        // On lance le processus avec une mention "Manuel" pour info
+        triggerMonthlyProcess(user, userProfile, monthKey + " (Manuel)");
+  }} 
       />
 
       {/* TOP NAVIGATION (DESKTOP) */}
