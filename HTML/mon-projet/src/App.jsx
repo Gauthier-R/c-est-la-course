@@ -38,7 +38,7 @@ import {
 import { getFirestore, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
 
 // --- API CONFIGURATION ---
-const apiKey = "AIzaSyDuK4W2XpPxDGjMCxeiEDiAUi11w7KV8B0"; // Laisser vide, injecté par l'environnement
+const apiKey = "AIzaSyCjcJoVxEkJG76D1yUbdocgxlmhqdPBNOE"; // Laisser vide, injecté par l'environnement
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -182,7 +182,7 @@ const processFlowData = (timeRange, transactions) => {
 async function callGeminiAPI(systemPrompt, userPrompt) {
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -781,7 +781,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     setIsAnalyzing(true);
     const context = `Analyse l'actif: ${asset.name} (${asset.type}). Markdown.`;
     try {
-        const result = await callGeminiAPI("Expert Bourse.", context);
+        const result = await callGeminiAPI("Expert Bourse. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", context);
         setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -928,7 +928,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     setIsAnalyzing(true);
     const context = `Analyse le patrimoine: ${netWorth}€. Evolution: ${netWorthGrowth}%.`;
     try {
-      const result = await callGeminiAPI("Expert finance.", context);
+      const result = await callGeminiAPI("Expert finance. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", context);
       setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -937,7 +937,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleForecast = async () => {
     setIsForecasting(true);
     try {
-      const resultText = await callGeminiAPI("Expert prévision.", `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
+      const resultText = await callGeminiAPI("Expert prévision. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
       const jsonStr = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       setForecast(JSON.parse(jsonStr));
     } catch (e) { setForecast({ revenus: 0, depenses: 0, solde: 0, conseil: "Erreur." }); }
@@ -947,7 +947,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleTxAnalysis = async () => {
     setIsTxAnalyzing(true);
     try {
-      const result = await callGeminiAPI("Analyste budget.", `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
+      const result = await callGeminiAPI("Analyste budget. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
       setTxAnalysis(result);
     } catch (e) { setTxAnalysis("Erreur."); }
     setIsTxAnalyzing(false);
@@ -1279,7 +1279,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       - Si c'est une dépense ou un revenu, extrais 'accountName'.
     `;
     try {
-      const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
+      const resultText = await callGeminiAPI("Extraction transaction JSON. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", userPrompt);
       const data = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim());
       setNewTrans({ 
         date: data.date || new Date().toISOString().split('T')[0], 
@@ -1413,7 +1413,7 @@ const AiAdvisorView = ({ assets, transactions }) => {
     if (!userMessage.trim()) return;
     const newMessages = [...messages, { role: 'user', content: userMessage }];
     setMessages(newMessages); setInput(''); setIsLoading(true);
-    const systemPrompt = `Patrimoine: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions.slice(0,5))}. Conseiller expert.`;
+    const systemPrompt = `Patrimoine: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions.slice(0,5))}. Conseiller expert. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.`;
     try {
         const aiResponse = await callGeminiAPI(systemPrompt, userMessage);
         setMessages([...newMessages, { role: 'assistant', content: aiResponse }]);
@@ -1701,15 +1701,6 @@ export default function App() {
          if (profileDoc.exists()) {
              const data = profileDoc.data();
              setUserProfile(data);
-
-             // --- LOGIQUE MENSUELLE (BIEN PLACÉE ICI) ---
-             const lastReport = data.lastMonthlyReportDate;
-             const today = new Date();
-             const currentMonthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
-             
-             if (data.emailReports && lastReport !== currentMonthKey) {
-                 triggerMonthlyProcess(currentUser, data, currentMonthKey);
-             }
          } else {
                  // Try to init profile from Auth provider data (e.g. Google)
                  if (currentUser.displayName) {
@@ -1734,6 +1725,23 @@ export default function App() {
     }); 
     return () => unsubAuth(); 
   }, []);
+
+  // --- DÉCLENCHEUR DE RAPPORT MENSUEL AUTOMATIQUE ---
+  const isProcessingReport = useRef(false); 
+
+  useEffect(() => {
+      if (user && userProfile && assets !== null && transactions !== null && !isProcessingReport.current) {
+          const today = new Date();
+          const currentMonthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+          const lastReport = userProfile.lastMonthlyReportDate;
+
+          if (userProfile.emailReports && lastReport !== currentMonthKey) {
+              isProcessingReport.current = true; // On verrouille
+              triggerMonthlyProcess(user, userProfile, currentMonthKey, false)
+                  .finally(() => { isProcessingReport.current = false; });
+          }
+      }
+  }, [user, userProfile, assets, transactions]);
 
   useEffect(() => {
     if (!user) return;
@@ -2053,51 +2061,58 @@ export default function App() {
     }
   };
 
-  const triggerMonthlyProcess = async (currentUser, profile, monthKey) => {
-    console.log("Démarrage du rapport mensuel...");
+  const triggerMonthlyProcess = async (currentUser, profile, monthKey, isManual = false) => {
+      // Sécurité : ne pas envoyer de rapport si les données ne sont pas prêtes
+      if (!assets || !transactions) {
+          console.log("Données non prêtes pour le rapport.");
+          return;
+      }
 
-    // 1. Demander à l'IA un résumé de santé financière
+      console.log(isManual ? "Envoi manuel..." : "Envoi du rapport mensuel automatique...");
+
+      // --- MODIFICATION DANS triggerMonthlyProcess (Ligne 1021) ---
     const aiSummary = await callGeminiAPI(
-      "Tu es un expert financier. Analyse ces données et fais un résumé très court (10 lignes max) des progrès du mois.",
+      // Nouvelle instruction plus stricte sur le formatage
+      "Tu es un expert financier. Analyse ces données et fais un résumé très court (10 lignes max) des progrès du mois. " +
+      "IMPORTANT : N'utilise JAMAIS de caractères Markdown (pas de * ni de **). " +
+      "Utilise uniquement des balises HTML simples : <br/> pour les retours à la ligne, <b> pour le gras, et <ul>/<li> pour les listes.",
+      
       `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions du mois: ${JSON.stringify(transactions?.slice(0,10))}`
     );
 
-    // 2. Préparer les données de sauvegarde
-    const backupJSON = JSON.stringify({
-      assets: assets,
-      transactions: transactions,
-      profile: profile,
-      date: monthKey
-    });
+      const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey });
 
-    // 3. Envoyer l'e-mail via EmailJS
-    try {
-      // Initialise avec ta clé publique EmailJS
-      emailjs.init("OvBeXwPPROzqE2kQL"); 
+      try {
+        await emailjs.send("service_htd01wn", "template_ac5mdxf", {
+          to_email: profile.email || currentUser.email,
+          user_name: profile.firstName,
+          month: monthKey,
+          report_content: aiSummary,
+          backup_data: backupJSON
+        });
 
-      await emailjs.send("service_htd01wn", "template_ac5mdxf", {
-        to_email: profile.email || currentUser.email,
-        user_name: profile.firstName,
-        month: monthKey,
-        report_content: aiSummary,
-        backup_data: backupJSON // On envoie le JSON brut dans le corps du mail
-      });
+        // Téléchargement de secours
+        const blob = new Blob([backupJSON], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Wealth_Backup_${monthKey.replace(/ /g, '_')}.json`;
+        link.click();
 
-      // 4. Téléchargement de secours automatique (ton code actuel) [cite: 412]
-      const blob = new Blob([backupJSON], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Wealth_Backup_${monthKey}.json`;
-      link.click();
-
-      // 5. Marquer comme fait en base de données pour ne pas boucler
-      await handleUpdateProfile({ lastMonthlyReportDate: monthKey });
-      
-      alert("Votre rapport mensuel et votre sauvegarde ont été générés !");
-    } catch (error) {
-      console.error("Erreur EmailJS:", error);
-    }
+        // MISE À JOUR DIRECTE SANS PASSER PAR handleUpdateProfile
+        // On utilise currentUser.uid passé en paramètre pour éviter le lag de l'état 'user'
+        const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
+        
+        // On ne met à jour la date en BDD que pour le rapport automatique (pour ne pas bloquer le mois)
+        if (!isManual) {
+          await setDoc(profileRef, { lastMonthlyReportDate: monthKey }, { merge: true });
+          setUserProfile(prev => ({ ...prev, lastMonthlyReportDate: monthKey }));
+        }
+        
+        alert(isManual ? "Votre rapport a été envoyé avec succès !" : "Votre rapport mensuel automatique a été généré !");
+      } catch (error) {
+        console.error("Erreur rapport:", error);
+      }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50"><Loader2 className="animate-spin" /></div>;
@@ -2128,11 +2143,11 @@ export default function App() {
         transactions={transactions}     
         onRestore={handleRestoreBackup}
         onSendReport={() => {
-        const today = new Date();
-        const monthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
-        // On lance le processus avec une mention "Manuel" pour info
-        triggerMonthlyProcess(user, userProfile, monthKey + " (Manuel)");
-  }} 
+          const today = new Date();
+          const monthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+          // On passe 'true' pour isManual
+          triggerMonthlyProcess(user, userProfile, monthKey + " (Manuel)", true);
+      }}
       />
 
       {/* TOP NAVIGATION (DESKTOP) */}
