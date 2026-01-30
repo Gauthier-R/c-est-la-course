@@ -113,6 +113,16 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
+// --- FONCTION DE NETTOYAGE IA ---
+const formatAiResponse = (text) => {
+  if (!text) return "";
+  // Supprime les résidus de Markdown pour ne garder que le texte ou le HTML simple
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1') // Enlever les ** (gras markdown)
+    .replace(/\*(.*?)\*/g, '$1')     // Enlever les * (italique markdown)
+    .replace(/#{1,6}\s?/g, '');      // Enlever les # (titres markdown)
+};
+
 // --- DATA PROCESSING HELPERS ---
 
 const processHistoryData = (timeRange, currentAssets) => {
@@ -365,11 +375,11 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
                 <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={handleExport} className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all group">
                         <Save size={20} className="text-blue-500 group-hover:scale-110 transition-transform mb-1"/>
-                        <span className="text-[10px] font-bold uppercase text-blue-600">Exporter JSON</span>
+                        <span className="text-[10px] font-bold uppercase text-blue-600">Exporter Sauvegarde</span>
                     </button>
                     <button type="button" onClick={() => fileInputRef.current.click()} className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all group">
                         <Cloud size={20} className="text-slate-400 group-hover:text-indigo-600 mb-1"/>
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Importer</span>
+                        <span className="text-[10px] font-bold uppercase text-slate-500">Importer Sauvegarde</span>
                     </button>
                     <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileChange} />
                 </div>
@@ -474,16 +484,47 @@ const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percent
 
 const MessageBubble = ({ message }) => {
   const isUser = message.role === 'user';
+  
   const parseContent = (text) => {
+    // Sécurité : si le texte est vide ou null
+    if (!text) return "";
     if (isUser) return text;
-    return text.split('\n').map((line, index) => {
-      if (line.startsWith('### ')) return <h4 key={index} className="text-base font-bold text-indigo-900 mt-3 mb-1">{line.replace('### ', '')}</h4>;
-      if (line.startsWith('## ')) return <h3 key={index} className="text-lg font-bold text-indigo-700 mt-4 mb-2">{line.replace('## ', '')}</h3>;
-      if (line.trim().match(/^[-*]\s/)) return (<div key={index} className="flex gap-2 ml-1 mb-1"><span className="text-indigo-400 mt-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0 block"></span><span className="text-slate-700">{line.replace(/^[-*]\s/, '')}</span></div>);
+    
+    // On utilise la fonction de nettoyage définie plus haut
+    const cleanText = formatAiResponse(text);
+    
+    return cleanText.split('\n').map((line, index) => {
+      let content = line;
+      let isHeader2 = line.startsWith('## ');
+      let isHeader3 = line.startsWith('### ');
+      let isList = line.trim().match(/^[-*]\s/);
+
+      if (isHeader2) content = line.replace('## ', '');
+      if (isHeader3) content = line.replace('### ', '');
+      if (isList) content = line.replace(/^[-*]\s/, '');
+
+      // Logique pour transformer les <b> en vrais éléments HTML gras
+      const parts = content.split(/(<b>.*?<\/b>)/g);
+      const renderedLine = parts.map((part, i) => {
+        if (part.startsWith('<b>') && part.endsWith('</b>')) {
+          return <strong key={i} className="font-bold text-slate-900">{part.replace(/<\/?b>/g, '')}</strong>;
+        }
+        return part;
+      });
+
+      if (isHeader2) return <h3 key={index} className="text-lg font-bold text-indigo-700 mt-4 mb-2">{renderedLine}</h3>;
+      if (isHeader3) return <h4 key={index} className="text-base font-bold text-indigo-900 mt-3 mb-1">{renderedLine}</h4>;
+      if (isList) return (
+        <div key={index} className="flex gap-2 ml-1 mb-1">
+          <span className="text-indigo-400 mt-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0 block"></span>
+          <span className="text-slate-700">{renderedLine}</span>
+        </div>
+      );
       if (!line.trim()) return <div key={index} className="h-2"></div>;
-      return <p key={index} className="mb-1 text-slate-700 leading-relaxed">{line}</p>;
+      return <p key={index} className="mb-1 text-slate-700 leading-relaxed">{renderedLine}</p>;
     });
   };
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[90%] md:max-w-[85%] p-4 rounded-2xl text-sm shadow-sm ${isUser ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 rounded-bl-none'}`}>
@@ -781,7 +822,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     setIsAnalyzing(true);
     const context = `Analyse l'actif: ${asset.name} (${asset.type}). Markdown.`;
     try {
-        const result = await callGeminiAPI("Expert Bourse. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", context);
+        const result = await callGeminiAPI("Expert Bourse. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", context);
         setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -928,7 +969,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     setIsAnalyzing(true);
     const context = `Analyse le patrimoine: ${netWorth}€. Evolution: ${netWorthGrowth}%.`;
     try {
-      const result = await callGeminiAPI("Expert finance. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", context);
+      const result = await callGeminiAPI("Expert finance. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", context);
       setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -937,7 +978,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleForecast = async () => {
     setIsForecasting(true);
     try {
-      const resultText = await callGeminiAPI("Expert prévision. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
+      const resultText = await callGeminiAPI("Expert prévision. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
       const jsonStr = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       setForecast(JSON.parse(jsonStr));
     } catch (e) { setForecast({ revenus: 0, depenses: 0, solde: 0, conseil: "Erreur." }); }
@@ -947,7 +988,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleTxAnalysis = async () => {
     setIsTxAnalyzing(true);
     try {
-      const result = await callGeminiAPI("Analyste budget. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
+      const result = await callGeminiAPI("Analyste budget. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
       setTxAnalysis(result);
     } catch (e) { setTxAnalysis("Erreur."); }
     setIsTxAnalyzing(false);
@@ -1279,7 +1320,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       - Si c'est une dépense ou un revenu, extrais 'accountName'.
     `;
     try {
-      const resultText = await callGeminiAPI("Extraction transaction JSON. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.", userPrompt);
+      const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
       const data = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim());
       setNewTrans({ 
         date: data.date || new Date().toISOString().split('T')[0], 
@@ -1399,32 +1440,134 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   );
 };
 
-const AiAdvisorView = ({ assets, transactions }) => {
+const AiAdvisorView = ({ assets, transactions, userProfile }) => {
   if (assets === null || transactions === null) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
-  const [messages, setMessages] = useState([{ role: 'assistant', content: "Bonjour ! Je suis votre conseiller financier intelligent." }]);
+  
+  const [messages, setMessages] = useState([{ role: 'assistant', content: "Bonjour ! Je suis votre conseiller financier intelligent. Comment puis-je vous aider aujourd'hui ?" }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
-  const handleSend = async (customPrompt = null) => {
+  const handleSend = async (customPrompt = null, label = null) => {
     const userMessage = customPrompt || input;
     if (!userMessage.trim()) return;
-    const newMessages = [...messages, { role: 'user', content: userMessage }];
-    setMessages(newMessages); setInput(''); setIsLoading(true);
-    const systemPrompt = `Patrimoine: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions.slice(0,5))}. Conseiller expert. IMPORTANT : N'utilise AUCUN caractère Markdown (*, **). Réponds en texte brut clair.`;
+
+    // Si c'est un bouton, on affiche un label plus joli dans le chat
+    const displayMessage = label || userMessage;
+    const newMessages = [...messages, { role: 'user', content: displayMessage }];
+    
+    setMessages(newMessages); 
+    setInput(''); 
+    setIsLoading(true);
+
+    // On injecte le profil de risque et les objectifs dans le contexte
+    const risk = userProfile?.riskProfile || 'balanced';
+    const goal = userProfile?.financialGoal || 'growth';
+
+    const systemPrompt = `
+      Tu es un conseiller financier expert. 
+      Profil utilisateur : Risque ${risk}, Objectif : ${goal}.
+      Patrimoine : ${JSON.stringify(assets)}. 
+      Dernières transactions : ${JSON.stringify(transactions.slice(0, 10))}.
+      
+      CONSIGNE : Réponds de manière concise (max 15 lignes). 
+      INTERDICTION : N'utilise JAMAIS de Markdown (*, **, #).
+      FORMAT : Utilise des retours à la ligne simples et des listes avec des tirets (-).
+    `;
+
     try {
         const aiResponse = await callGeminiAPI(systemPrompt, userMessage);
         setMessages([...newMessages, { role: 'assistant', content: aiResponse }]);
-    } catch (e) { setMessages([...newMessages, { role: 'assistant', content: "Erreur." }]); }
+    } catch (e) { 
+        setMessages([...newMessages, { role: 'assistant', content: "Désolé, je rencontre une difficulté technique. Réessayez dans une minute." }]); 
+    }
     setIsLoading(false);
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-140px)] animate-in fade-in pb-20 md:pb-0">
-      <div className="lg:col-span-1 space-y-4"><Card className="bg-indigo-50 border-indigo-100"><div className="flex items-center gap-2 mb-3 text-indigo-800 font-bold"><Sparkles size={18} /><span>Actions Rapides</span></div><div className="space-y-2"><button onClick={() => handleSend("Bilan de santé global.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Bilan Santé</button><button onClick={() => handleSend("Analyser mes dépenses.")} className="w-full text-left p-3 rounded-lg bg-white text-sm text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Analyse Dépenses</button></div></Card></div>
-      <div className="lg:col-span-3 flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="bg-slate-50 p-4 border-b border-slate-200"><h3 className="font-bold text-slate-700">Assistant Financier</h3></div><div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>{messages.map((msg, idx) => (<MessageBubble key={idx} message={msg} />))}</div><div className="p-4 bg-white border-t border-slate-100"><form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2"><input type="text" value={input} onChange={(e) => setInput(e.target.value)} className="flex-1 p-3 border border-slate-300 rounded-lg" disabled={isLoading} /><Button variant="magic" disabled={isLoading || !input.trim()}><Send size={18} /></Button></form></div></div>
+      {/* Sidebar - Actions Rapides */}
+      <div className="lg:col-span-1 space-y-4 overflow-y-auto no-scrollbar">
+        <Card className="bg-indigo-50 border-indigo-100 p-4">
+          <div className="flex items-center gap-2 mb-4 text-indigo-800 font-bold">
+            <Sparkles size={18} />
+            <span>Analyses Flash</span>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-2">
+            <button onClick={() => handleSend("Fais un bilan de santé global de mon patrimoine.", "📊 Bilan de santé global")} 
+                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+              <Activity size={14} /> Bilan de santé
+            </button>
+
+            <button onClick={() => handleSend("Analyse mes dépenses récentes et identifie des économies possibles.", "💸 Analyse des dépenses")} 
+                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+              <ArrowDownRight size={14} /> Analyse dépenses
+            </button>
+
+            <button onClick={() => handleSend("Calcule si mon épargne de précaution (liquidités) couvre au moins 4 mois de mes dépenses moyennes.", "🛡️ Sécurité & Précaution")} 
+                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+              <ShieldCheck size={14} /> Épargne de précaution
+            </button>
+
+            <button onClick={() => handleSend("En fonction de mon profil de risque, suggère une meilleure répartition de mon patrimoine.", "📈 Optimiser l'allocation")} 
+                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+              <Scale size={14} /> Arbitrage & Risque
+            </button>
+
+            <button onClick={() => handleSend("Estime ma capacité d'apport pour un projet immobilier sans vider mes comptes d'investissement.", "🏠 Projet Immobilier")} 
+                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+              <Home size={14} /> Capacité Immobilière
+            </button>
+          </div>
+        </Card>
+
+        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+           <p className="text-[10px] text-blue-700 font-bold uppercase mb-1">Status API</p>
+           <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-xs text-blue-900 font-medium">Assistant prêt à l'emploi</span>
+           </div>
+        </div>
+      </div>
+
+      {/* Zone de Chat */}
+      <div className="lg:col-span-3 flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+          <h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={20} className="text-indigo-600"/> Conseiller MyWealth</h3>
+          <span className="text-[10px] bg-slate-200 px-2 py-1 rounded-full text-slate-600 font-bold">MODE EXPERT</span>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30" ref={scrollRef}>
+          {messages.map((msg, idx) => (<MessageBubble key={idx} message={msg} />))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-indigo-600" />
+                <span className="text-sm text-slate-500 italic">Analyse en cours...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-white border-t border-slate-100">
+          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+            <input 
+              type="text" 
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              placeholder="Posez une question sur vos finances..."
+              className="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              disabled={isLoading} 
+            />
+            <Button variant="magic" disabled={isLoading || !input.trim()} type="submit">
+              <Send size={18} />
+            </Button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 };
@@ -2206,7 +2349,7 @@ export default function App() {
             onUpdateTransaction={handleUpdateTransaction}
           />
         )}
-        {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} />}
+        {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} userProfile={userProfile}/>}
       </main>
 
       {/* BOTTOM NAVIGATION (MOBILE) */}
