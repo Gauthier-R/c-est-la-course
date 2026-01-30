@@ -38,7 +38,9 @@ import {
 import { getFirestore, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
 
 // --- API CONFIGURATION ---
-const apiKey = "AIzaSyCjcJoVxEkJG76D1yUbdocgxlmhqdPBNOE"; // Laisser vide, injecté par l'environnement
+const apiKey = "AIzaSyCjcJoVxEkJG76D1yUbdocgxlmhqdPBNOE"; // Clef API pour Gemini
+// --- INITIALISATION EMAILJS ---
+emailjs.init("OvBeXwPPROzqE2kQL"); // Clef API pour EmailJS
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -121,6 +123,30 @@ const formatAiResponse = (text) => {
     .replace(/\*\*(.*?)\*\*/g, '$1') // Enlever les ** (gras markdown)
     .replace(/\*(.*?)\*/g, '$1')     // Enlever les * (italique markdown)
     .replace(/#{1,6}\s?/g, '');      // Enlever les # (titres markdown)
+};
+
+const Toast = ({ message, type = 'success', onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000); // Disparaît après 5s
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className="fixed top-4 right-4 z-[300] animate-in slide-in-from-right duration-300">
+      <div className="bg-slate-900 text-white p-4 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 min-w-[300px]">
+        <div className="bg-green-500/20 p-2 rounded-full text-green-400">
+          <CheckCircle size={20} />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-blue-400 uppercase tracking-wider">MyWealth.io</p>
+          <p className="text-sm text-slate-200">{message}</p>
+        </div>
+        <button onClick={onClose} className="text-slate-500 hover:text-white p-1">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // --- DATA PROCESSING HELPERS ---
@@ -1774,6 +1800,13 @@ export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  
+  
+// Message envoie auto mail
+const [toast, setToast] = useState(null); 
+
+const showToast = (msg) => setToast({ message: msg });
+
 
   // --- AUTO LOGOUT LOGIC ---
   const [showAutoLogoutModal, setShowAutoLogoutModal] = useState(false);
@@ -2205,58 +2238,58 @@ export default function App() {
   };
 
   const triggerMonthlyProcess = async (currentUser, profile, monthKey, isManual = false) => {
-      // Sécurité : ne pas envoyer de rapport si les données ne sont pas prêtes
-      if (!assets || !transactions) {
-          console.log("Données non prêtes pour le rapport.");
-          return;
-      }
+    console.log("🚀 ÉTAPE 1: Lancement du processus pour", monthKey); //
+    
+    // Sécurité : Vérification des données
+    if (!assets || !transactions) {
+      console.log("❌ ÉCHEC: Données Assets ou Transactions manquantes"); //
+      return;
+    }
 
-      console.log(isManual ? "Envoi manuel..." : "Envoi du rapport mensuel automatique...");
-
-      // --- MODIFICATION DANS triggerMonthlyProcess (Ligne 1021) ---
+    // IA : Analyse avec formatage HTML strict pour le mail
+    console.log("🤖 ÉTAPE 2: Appel à Gemini..."); //
     const aiSummary = await callGeminiAPI(
-      // Nouvelle instruction plus stricte sur le formatage
-      "Tu es un expert financier. Analyse ces données et fais un résumé très court (10 lignes max) des progrès du mois. " +
-      "IMPORTANT : N'utilise JAMAIS de caractères Markdown (pas de * ni de **). " +
-      "Utilise uniquement des balises HTML simples : <br/> pour les retours à la ligne, <b> pour le gras, et <ul>/<li> pour les listes.",
-      
-      `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions du mois: ${JSON.stringify(transactions?.slice(0,10))}`
+      "Tu es un expert financier. Analyse ces données et fais un résumé court (10 lignes max). " +
+      "IMPORTANT : N'utilise JAMAIS de Markdown (pas de * ni de **). " +
+      "Utilise uniquement : <br/> pour les retours à la ligne, <b> pour le gras, et <ul>/<li> pour les listes.",
+      `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions?.slice(0,10))}`
     );
+    
+    // Log de succès de l'IA
+    console.log("✅ IA a répondu"); //
 
-      const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey });
+    // Préparation des données brutes pour la sauvegarde (formatées pour la lisibilité)
+    const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey }, null, 2);
 
-      try {
-        await emailjs.send("service_htd01wn", "template_ac5mdxf", {
-          to_email: profile.email || currentUser.email,
-          user_name: profile.firstName,
-          month: monthKey,
-          report_content: aiSummary,
-          backup_data: backupJSON
-        });
+    try {
+      console.log("📧 ÉTAPE 3: Envoi via EmailJS..."); //
+      
+      // EMAIL : Envoi via EmailJS (Correction : ajout de 'const response')
+      const response = await emailjs.send("service_htd01wn", "template_ac5mdxf", {
+        to_email: profile.email || currentUser.email,
+        user_name: profile.firstName,
+        month: monthKey,
+        report_content: aiSummary,
+        backup_data: backupJSON 
+      });
+      
+      console.log("✉️ RÉPONSE EMAILJS:", response.status, response.text); //
 
-        // Téléchargement de secours
-        const blob = new Blob([backupJSON], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Wealth_Backup_${monthKey.replace(/ /g, '_')}.json`;
-        link.click();
-
-        // MISE À JOUR DIRECTE SANS PASSER PAR handleUpdateProfile
-        // On utilise currentUser.uid passé en paramètre pour éviter le lag de l'état 'user'
-        const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
-        
-        // On ne met à jour la date en BDD que pour le rapport automatique (pour ne pas bloquer le mois)
-        if (!isManual) {
-          await setDoc(profileRef, { lastMonthlyReportDate: monthKey }, { merge: true });
-          setUserProfile(prev => ({ ...prev, lastMonthlyReportDate: monthKey }));
-        }
-        
-        alert(isManual ? "Votre rapport a été envoyé avec succès !" : "Votre rapport mensuel automatique a été généré !");
-      } catch (error) {
-        console.error("Erreur rapport:", error);
+      // BDD : On marque le rapport comme envoyé uniquement si c'est le rapport automatique
+      const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
+      
+      if (!isManual) {
+        console.log("💾 Mise à jour de la date en base de données..."); //
+        await setDoc(profileRef, { lastMonthlyReportDate: monthKey }, { merge: true });
+        setUserProfile(prev => ({ ...prev, lastMonthlyReportDate: monthKey }));
       }
-  };
+      
+      showToast(isManual ? "Votre rapport a été envoyé par mail !" : "Nouveau bilan mensuel généré et envoyé !");
+      
+    } catch (error) {
+      console.error("❌ Erreur lors du processus :", error); //
+    }
+};
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50"><Loader2 className="animate-spin" /></div>;
   
@@ -2367,7 +2400,7 @@ export default function App() {
           ))}
         </div>
       </div>
-
+    {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
