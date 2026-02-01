@@ -2259,7 +2259,7 @@ const showToast = (msg) => setToast({ message: msg });
     console.log("✅ IA a répondu"); //
 
     // Préparation des données brutes pour la sauvegarde (formatées pour la lisibilité)
-    const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey }, null, 2);
+    const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey });
 
     try {
       console.log("📧 ÉTAPE 3: Envoi via EmailJS..."); //
