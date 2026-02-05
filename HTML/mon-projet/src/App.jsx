@@ -1610,19 +1610,33 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     if (!aiInput) return;
     setIsAiProcessing(true);
     const accountNames = liquidAssets.map(a => a.name).join(', ');
-    const userPrompt = `
-      Comptes disponibles : ${accountNames}.
-      Analyse : "${aiInput}". 
-      Date de référence (aujourd'hui) : ${new Date().toLocaleDateString('fr-FR')}. 
-      Catégories possibles : ${Object.keys(EXPENSE_CATEGORIES).join(', ')}.
-      Instructions :
-      - Extrais la date mentionnée (hier, demain, le 25...) au format YYYY-MM-DD.
-      - Si aucune date n'est mentionnée, utilise la date de référence.
-      - Extrais : label, amount (number), type (expense/income/transfer), category, date.
-      - Pour la catégorie, choisis la plus pertinente parmi la liste des catégories possibles. Si aucune ne correspond parfaitement, mets 'Autre'.
-      - Si c'est un virement/transfert, extrais 'accountFrom' (compte source) et 'accountTo' (compte destination) à partir des comptes disponibles.
-      - Si c'est une dépense ou un revenu, extrais 'accountName'.
-    `;
+    const userPrompt = `CONTEXTE :
+    - Comptes disponibles : ${accountNames}.
+    - Catégories autorisées : ${Object.keys(EXPENSE_CATEGORIES).join(', ')}.
+    - Date d'aujourd'hui : ${new Date().toLocaleDateString('fr-FR')}.
+    - Analyse l'entrée utilisateur suivante : "${aiInput}"
+
+    GUIDE DE CLASSIFICATION (Utilise ces exemples pour choisir la catégorie) :
+    - Alimentation : Supermarchés (Lidl, Leclerc), restaurants, boulangerie, UberEats.
+    - Logement : Loyer, charges, électricité, bricolage (Leroy Merlin, Castorama).
+    - Transport : Essence, parking, péage, train (SNCF), Uber, bus.
+    - Loisirs : Cinéma, abonnement jeux vidéo, sorties, Netflix, Spotify.
+    - Santé : Pharmacie, médecin, dentiste, mutuelle.
+    - Shopping : Vêtements, Amazon, High-tech, décoration.
+    - Services : Facture téléphone, internet, assurance, banque.
+    - Autre : Si rien ne correspond.
+
+    INSTRUCTIONS DE SORTIE (JSON UNIQUEMENT) :
+    - Extrais le "label" (le nom du marchand ou la description de l'achat).
+    - Extrais la date au format YYYY-MM-DD (interprète "hier", "lundi dernier", etc.).
+    - Extrais le montant (nombre pur).
+    - Détermine le type : 'expense' (dépense, achat), 'income' (revenu, remboursement, salaire) ou 'transfer' (virement).
+    - Pour la catégorie, sois précis en te basant sur le marchand.
+    - Si type='transfer', extrais 'accountFrom' et 'accountTo' depuis la liste des comptes.
+    - Si type='expense' ou 'income', extrais 'accountName' (le compte impacté).
+
+    Réponds uniquement avec le JSON sans texte avant ou après.
+  `;
     try {
       const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
       const data = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim());
