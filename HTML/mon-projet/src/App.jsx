@@ -767,12 +767,69 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   const [selectedPosition, setSelectedPosition] = useState(null);
   const [newPosition, setNewPosition] = useState({ name: '', value: '' });
   const [newAssetHistoryPoint, setNewAssetHistoryPoint] = useState({ date: new Date().toISOString().split('T')[0], value: asset.value });
-  const [currentBalanceUpdate, setCurrentBalanceUpdate] = useState(asset.value);
+  const [currentBalanceUpdate, setCurrentBalanceUpdate] = useState(Number(asset.value || 0).toFixed(2));
   const [newPosHistoryPoint, setNewPosHistoryPoint] = useState({ date: new Date().toISOString().split('T')[0], value: '' });
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [deleteConfig, setDeleteConfig] = useState(null); 
   const [focusedPosId, setFocusedPosId] = useState(null);
+  const [movementConfig, setMovementConfig] = useState(null); 
+  const [movementData, setMovementData] = useState({ positionId: '', amount: '' });
+
+  const handleExecuteMovement = (e) => {
+    e.preventDefault();
+    const amount = parseFloat(movementData.amount);
+    if (isNaN(amount) || amount <= 0 || !movementData.positionId) return;
+
+    const cashPos = asset.positions.find(p => p.isCash);
+    const targetPos = asset.positions.find(p => p.id.toString() === movementData.positionId.toString());
+
+    if (!cashPos || !targetPos) return;
+
+    const updatedPositions = asset.positions.map(p => {
+      if (p.isCash) {
+        // Si achat : on retire du cash. Si vente : on ajoute au cash.
+        const delta = movementConfig.type === 'buy' ? -amount : amount;
+        return { ...p, value: p.value + delta };
+      }
+      if (p.id.toString() === movementData.positionId.toString()) {
+        // Correction ici : on utilise 0 comme valeur par défaut si totalInvested est à 0
+        const currentInvested = (typeof p.totalInvested === 'number') ? p.totalInvested : 0;
+        const delta = movementConfig.type === 'buy' ? amount : -amount;
+        
+        return { 
+          ...p, 
+          value: parseFloat((p.value + delta).toFixed(2)),
+          // On ajoute uniquement le montant du mouvement au PRU existant
+          totalInvested: parseFloat((currentInvested + (movementConfig.type === 'buy' ? amount : -amount)).toFixed(2))
+        };
+      }
+      return p;
+    });
+
+    onUpdate({ ...asset, positions: updatedPositions });
+    setMovementConfig(null);
+    setMovementData({ positionId: '', amount: '' });
+  };
+
+  // Calculs avancés pour PEA/CTO
+  const metrics = useMemo(() => {
+    const cashPos = (asset.positions || []).find(p => p.isCash);
+    const cashValue = cashPos ? cashPos.value : 0;
+    
+    if (!isComposite) return { totalInvested: asset.value, plusValue: 0, plusValuePct: 0, cash: cashValue };
+    
+    const supports = (asset.positions || []).filter(p => !p.isCash);
+    const totalInvestedInSupports = supports.reduce((acc, pos) => acc + (pos.totalInvested || 0), 0);
+    const currentSupportsValue = supports.reduce((acc, pos) => acc + pos.value, 0);
+
+    const plusValue = currentSupportsValue - totalInvestedInSupports;
+    const plusValuePct = totalInvestedInSupports > 0 ? (plusValue / totalInvestedInSupports) * 100 : 0;
+
+    return { totalInvested: totalInvestedInSupports, plusValue, plusValuePct, cash: cashValue };
+  }, [asset, isComposite]);
+
+  const { totalInvested, plusValue, plusValuePct, cash } = metrics;
 
   useEffect(() => {
     if (selectedPosition) {
@@ -781,13 +838,19 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     }
   }, [asset, selectedPosition]);
 
-  const getChartData = (history, currentValue) => {
+  const getChartData = (history, currentValue, currentInvested) => {
     const uniqueHistoryMap = new Map();
     (history || []).forEach(item => uniqueHistoryMap.set(item.date, item));
     const today = new Date().toISOString().split('T')[0];
-    uniqueHistoryMap.set(today, { date: today, value: currentValue });
+    // On ajoute la valeur investie au point d'aujourd'hui
+    uniqueHistoryMap.set(today, { 
+      date: today, 
+      value: currentValue, 
+      investedValue: currentInvested 
+    });
     return Array.from(uniqueHistoryMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
   };
+  
 
   const rebuildGlobalHistory = (currentPositions) => {
     const allDates = new Set();
@@ -798,7 +861,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         const sortedPosHistory = [...(pos.history || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
         const exactMatch = sortedPosHistory.find(h => h.date === date);
         if (exactMatch) return sum + exactMatch.value;
-        const previousEntries = sortedPosHistory.filter(h => new Date(h.date) < new Date(date));
+        const previousEntries = sortedPosHistory.filter(h => h.date < date);
         const lastEntry = previousEntries.length > 0 ? previousEntries[previousEntries.length - 1] : null;
         return sum + (lastEntry ? lastEntry.value : 0);
       }, 0);
@@ -806,12 +869,16 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     });
   };
 
-  const assetChartData = useMemo(() => getChartData(asset.history, asset.value), [asset]);
+  const assetChartData = useMemo(() => 
+    getChartData(asset.history, asset.value, totalInvested), 
+    [asset, totalInvested]
+  );
+
   const positionChartData = useMemo(() => selectedPosition ? getChartData(selectedPosition.history, selectedPosition.value) : [], [selectedPosition]);
 
   const handleUpdateBalance = (e) => {
     e.preventDefault();
-    const newValue = parseFloat(currentBalanceUpdate);
+    const newValue = Math.round(parseFloat(currentBalanceUpdate) * 100) / 100;
     if (isNaN(newValue)) return;
     const today = new Date().toISOString().split('T')[0];
     const historyWithoutToday = (asset.history || []).filter(h => h.date !== today);
@@ -821,12 +888,23 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
 
   const handleAddPosition = (e) => {
     e.preventDefault();
-    if (!newPosition.name || !newPosition.value) return;
-    const value = parseFloat(newPosition.value);
+    if (!newPosition.name) return;
     const today = new Date().toISOString().split('T')[0];
-    const updatedPositions = [...(asset.positions || []), { id: Date.now(), name: newPosition.name, value, history: [{ date: today, value: value }] }];
+    
+    // Création d'un support vide (valeur 0) avec un PRU (totalInvested) à 0
+    const newPos = { 
+      id: Date.now(), 
+      name: newPosition.name, 
+      value: 0, 
+      totalInvested: 0, 
+      history: [{ date: today, value: 0 }] 
+    };
+
+    const updatedPositions = [...(asset.positions || []), newPos];
+    // La valorisation totale du PEA inclut désormais ce nouveau support (à 0€) + le Cash
     const newTotal = updatedPositions.reduce((acc, p) => acc + p.value, 0);
     const newAssetHistory = rebuildGlobalHistory(updatedPositions);
+    
     onUpdate({ ...asset, positions: updatedPositions, value: newTotal, history: newAssetHistory });
     setNewPosition({ name: '', value: '' });
   };
@@ -838,10 +916,10 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     onUpdate({ ...asset, positions: updatedPositions, value: newTotal, history: newAssetHistory });
   };
 
-  const handleAddAssetHistory = (e) => {
+    const handleAddAssetHistory = (e) => {
     e.preventDefault();
     if (!newAssetHistoryPoint.date || !newAssetHistoryPoint.value) return;
-    const newValue = parseFloat(newAssetHistoryPoint.value);
+    const newValue = Math.round(parseFloat(newAssetHistoryPoint.value) * 100) / 100;
     const date = newAssetHistoryPoint.date;
     const historyWithoutDate = (asset.history || []).filter(h => h.date !== date);
     const updatedHistory = [...historyWithoutDate, { date: date, value: newValue }];
@@ -869,13 +947,25 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     if (!newPosHistoryPoint.date || !newPosHistoryPoint.value) return;
     const newValue = parseFloat(newPosHistoryPoint.value);
     const date = newPosHistoryPoint.date;
+    
     const historyWithoutDate = (selectedPosition.history || []).filter(h => h.date !== date);
     const updatedHistory = [...historyWithoutDate, { date: date, value: newValue }];
     updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
     const today = new Date().toISOString().split('T')[0];
     const latestPastEntry = [...updatedHistory].reverse().find(h => h.date <= today);
     const newPosValue = latestPastEntry ? latestPastEntry.value : selectedPosition.value;
-    const updatedPositions = asset.positions.map(p => p.id === selectedPosition.id ? { ...p, history: updatedHistory, value: newPosValue } : p);
+
+    const updatedPositions = asset.positions.map(p => {
+      if (p.id === selectedPosition.id) {
+        // LOGIQUE : Si le total investi est à 0, on considère que la première 
+        // valeur renseignée est l'investissement de départ (PRU).
+        const newTotalInvested = (p.totalInvested || 0) === 0 ? newPosValue : p.totalInvested;
+        return { ...p, history: updatedHistory, value: newPosValue, totalInvested: newTotalInvested };
+      }
+      return p;
+    });
+
     const newAssetTotal = updatedPositions.reduce((sum, p) => sum + p.value, 0);
     const newAssetHistory = rebuildGlobalHistory(updatedPositions);
     onUpdate({ ...asset, positions: updatedPositions, value: newAssetTotal, history: newAssetHistory });
@@ -915,128 +1005,353 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     setIsAnalyzing(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
-      <ConfirmationModal isOpen={!!deleteConfig} onClose={() => setDeleteConfig(null)} onConfirm={executeDelete} />
-      <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
-        {viewMode === 'asset' && (
-          <>
-            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
-              <div><button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2"><Building size={20} className="text-blue-600"/>{asset.name}</h2><p className="text-slate-500 text-xs md:text-sm">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p></div>
-              <div className="text-right"><p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p><p className="text-xl md:text-3xl font-bold text-blue-600">{formatCurrency(asset.value)}</p></div>
+return (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
+    <ConfirmationModal 
+      isOpen={!!deleteConfig} 
+      onClose={() => setDeleteConfig(null)} 
+      onConfirm={executeDelete} 
+    />
+    
+    <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
+      
+      {/* --- VUE DÉTAIL DE L'ACTIF --- */}
+      {viewMode === 'asset' && (
+        <>
+          {/* EN-TÊTE */}
+          <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+            <div>
+              <button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium">
+                <ChevronLeft size={16} /> Retour
+              </button>
+              <h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <Building size={20} className="text-blue-600"/>{asset.name}
+              </h2>
+              <p className="text-slate-500 text-xs md:text-sm">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p>
             </div>
-            <div className="flex border-b border-slate-100 px-4 md:px-6 overflow-x-auto no-scrollbar">
-              {isComposite && <button onClick={() => setActiveTab('composition')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'composition' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><List size={18} /> Composition</button>}
-              <button onClick={() => setActiveTab('history')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><History size={18} /> Historique</button>
-              <button onClick={() => setActiveTab('analysis')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}><Sparkles size={18} /> Analyse IA</button>
+            <div className="text-right">
+              <p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p>
+              <p className="text-xl md:text-3xl font-bold text-blue-600">{formatCurrency(asset.value)}</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 pb-20 md:pb-6">
-              {activeTab === 'composition' && isComposite && (
+          </div>
+
+          {/* NAVIGATION PAR ONGLETS */}
+          <div className="flex border-b border-slate-100 bg-white px-4 md:px-6">
+            {isComposite && (
+              <button 
+                onClick={() => setActiveTab('composition')}
+                className={`px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'composition' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
+              >
+                Composition
+              </button>
+            )}
+            <button 
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
+            >
+              Historique
+            </button>
+            <button 
+              onClick={() => setActiveTab('analysis')}
+              className={`px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
+            >
+              Analyse IA ✨
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+            
+            {/* CONTENU ONGLET : COMPOSITION */}
+            {activeTab === 'composition' && isComposite && (
+              <>
+                {['investissement', 'epargne_salariale', 'crypto'].includes(asset.type) && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <p className="text-[10px] uppercase font-bold text-indigo-600 mb-1">Cash Disponible</p>
+                      <p className="text-sm font-bold text-indigo-700">
+                        {formatCurrency(asset.positions?.find(p => p.isCash)?.value || 0)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Total Versé (PRU)</p>
+                      <p className="text-sm font-bold text-slate-700">{formatCurrency(totalInvested)}</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2 md:col-span-1">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Plus-Value Latente</p>
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-bold ${plusValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {plusValue >= 0 ? '+' : ''}{formatCurrency(plusValue)}
+                        </p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${plusValue >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {plusValuePct.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <Card className="h-fit bg-slate-50/50 border-slate-200">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-blue-600"/> Ajouter une ligne</h3>
-                    <form onSubmit={handleAddPosition} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" placeholder="Ex: Air Liquide" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosition.value} onChange={(e) => setNewPosition({...newPosition, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center">Ajouter</Button></form>
-                  </Card>
-                  <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200 p-0 md:p-0">
-                    <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2">Lignes détenues</h3></div>
-                    <div className="divide-y divide-slate-100 overflow-y-auto max-h-[400px]">
-                      {(!asset.positions || asset.positions.length === 0) ? (<div className="p-10 text-center text-slate-400">Aucune ligne.</div>) : (
-                        asset.positions.map(pos => (
-                          <div 
-                            key={pos.id} 
-                            className="p-4 flex items-center justify-between hover:bg-slate-50 transition group cursor-pointer border-b border-slate-50 last:border-0" 
-                            onClick={(e) => { 
-                                // Si on est sur mobile, on focus d'abord
-                                if (window.innerWidth < 768 && focusedPosId !== pos.id) {
-                                    setFocusedPosId(pos.id);
-                                    return;
-                                }
-                                setSelectedPosition(pos); 
-                                setViewMode('position'); 
-                            }}
-                          >
-                            <div className="flex items-center gap-3 overflow-hidden min-w-0">
-                                <span className="font-medium text-slate-700 truncate min-w-0">{pos.name}</span>
-                            </div>
-                            <div className="flex items-center gap-4 flex-shrink-0">
-                                <span className="font-bold text-slate-900">{formatCurrency(pos.value)}</span>
-                                {/* Utilisation du focus pour mobile et group-hover pour desktop */}
-                                <div className={`${focusedPosId === pos.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
-                                    <button onClick={(e) => { e.stopPropagation(); setDeleteConfig({ type: 'position', id: pos.id }); }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16} /></button>
-                                </div>
-                            </div>
+                  <div className="space-y-6">
+                    <Card className="h-fit bg-slate-50/50 border-slate-200 shadow-sm">
+                      <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <ArrowRightLeft size={18} className="text-blue-600"/> Mouvement Interne
+                      </h3>
+                      {!movementConfig ? (
+                        <>
+                          <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+                            Déplacez vos fonds entre vos <b>espèces</b> et vos <b>supports</b>.
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <button onClick={() => setMovementConfig({type: 'buy'})} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all group">
+                              <PlusCircle size={18} className="mb-1 text-blue-600 group-hover:scale-110 transition-transform"/>
+                              <span className="text-[10px] font-bold uppercase tracking-wider">Acheter</span>
+                            </button>
+                            <button onClick={() => setMovementConfig({type: 'sell'})} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all group">
+                              <ArrowRightLeft size={18} className="mb-1 text-blue-600 group-hover:rotate-180 transition-transform duration-500"/>
+                              <span className="text-[10px] font-bold uppercase tracking-wider">Vendre</span>
+                            </button>
                           </div>
-                        ))
+                        </>
+                      ) : (
+                        <form onSubmit={handleExecuteMovement} className="space-y-3 animate-in fade-in zoom-in-95">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-bold uppercase text-indigo-600">{movementConfig.type === 'buy' ? 'Achat de support' : 'Vente de support'}</span>
+                            <button onClick={() => setMovementConfig(null)} className="text-indigo-400 hover:text-indigo-600"><X size={14}/></button>
+                          </div>
+                          <select className="w-full p-2 text-xs rounded-lg border border-indigo-200" value={movementData.positionId} onChange={(e) => setMovementData({...movementData, positionId: e.target.value})} required>
+                            <option value="">Sélectionner un support...</option>
+                            {asset.positions.filter(p => !p.isCash).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <input type="number" placeholder="Montant (€)" className="w-full p-2 text-xs rounded-lg border border-indigo-200" value={movementData.amount} onChange={(e) => setMovementData({...movementData, amount: e.target.value})} required />
+                          <Button type="submit" className="w-full text-xs py-2 bg-indigo-600 text-white">Confirmer</Button>
+                        </form>
+                      )}
+                    </Card>
+
+                    <Card className="h-fit bg-slate-50/50 border-slate-200">
+                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-blue-600"/> Ajouter une ligne</h3>
+                      <form onSubmit={handleAddPosition} className="space-y-4">
+                        <input type="text" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: ETF S&P 500" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} />
+                        <Button type="submit" className="w-full justify-center" disabled={!newPosition.name}>Créer la ligne</Button>
+                      </form>
+                    </Card>
+                  </div>
+
+                  <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200 p-0">
+                    <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-700 flex items-center gap-2">Lignes détenues</h3>
+                    </div>
+                    <div className="divide-y divide-slate-100 overflow-y-auto max-h-[400px]">
+                      {(!asset.positions || asset.positions.filter(p => !p.isCash).length === 0) ? (
+                        <div className="p-10 text-center text-slate-400">Aucune ligne investie.</div>
+                      ) : (
+                        asset.positions.filter(p => !p.isCash).map(pos => {
+                          // Calcul de la performance de la ligne
+                          const posPerf = pos.value - (pos.totalInvested || 0);
+                          const posPct = pos.totalInvested > 0 ? (posPerf / pos.totalInvested) * 100 : 0;
+                          
+                          return (
+                            <div 
+                              key={pos.id} 
+                              className="p-4 flex items-center justify-between hover:bg-slate-50 transition group cursor-pointer" 
+                              onClick={() => { setSelectedPosition(pos); setViewMode('position'); }}
+                            >
+                              {/* À GAUCHE : Nom et PRU */}
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium text-slate-700 truncate">{pos.name}</span>
+                              </div>
+                              
+                              {/* À DROITE : Valeur et Indicateur de Performance */}
+                              <div className="flex items-center gap-4 flex-shrink-0">
+                                <div className="text-right flex flex-col items-end">
+                                  <span className="font-bold text-slate-900">{formatCurrency(pos.value)}</span>
+                                  
+                                  {/* Tag de performance (Montant + Pourcentage) */}
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${posPerf >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                      {posPerf >= 0 ? '+' : ''}{posPct.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Bouton de suppression */}
+                                {!pos.isCash && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setDeleteConfig({ type: 'position', id: pos.id }); }} 
+                                  className="text-slate-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </Card>
                 </div>
-              )}
-              {activeTab === 'history' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="space-y-6">
-                    {isComposite ? (
-                        <Card className="h-fit bg-indigo-50 border-indigo-100">
-                          <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
-                          <p className="text-sm text-indigo-800 leading-relaxed">
-                            L'historique de ce compte est calculé automatiquement en additionnant l'historique de chaque ligne (actions, fonds, espèces).
-                          </p>
-                        </Card>
-                    ) : (
-                      <Card className="h-fit border-blue-200 bg-blue-50"><h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3><form onSubmit={handleUpdateBalance} className="space-y-4"><div><label className="block text-xs font-semibold text-blue-800 mb-1">Nouveau solde (€)</label><input type="number" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} /></div><Button type="submit" className="w-full">Valider</Button></form></Card>
-                    )}
-                    
-                    {!isComposite && <Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3><form onSubmit={handleAddAssetHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full" variant="secondary">Enregistrer</Button></form></Card>}
-                  </div>
-                  <div className="lg:col-span-2 space-y-6">
-                    <Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3><div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%"><AreaChart data={assetChartData}><defs><linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip 
-                      contentStyle={{ 
-                        borderRadius: '12px', 
-                        border: 'none', 
-                        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                        backdropFilter: 'blur(4px)',
-                        fontSize: '12px',
-                        padding: '8px 12px',
-                        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-                      }}
-                      offset={25}
-                      allowEscapeViewBox={{ x: false, y: true }}
-                      wrapperStyle={{ pointerEvents: 'none' }}
-                      formatter={(value) => [formatCurrency(value), 'Valorisation']} 
-                    /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorAsset)" /></AreaChart></ResponsiveContainer></div></Card>
-                    <Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique Global</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
-                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>{!isComposite && <div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div>}</div></div>))}</div></Card>
-                  </div>
+              </>
+            )}
+
+            {/* CONTENU ONGLET : HISTORIQUE */}
+            {activeTab === 'history' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+                <div className="space-y-6">
+                  {isComposite ? (
+                    <Card className="h-fit bg-indigo-50 border-indigo-100">
+                      <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
+                      <p className="text-sm text-indigo-800 leading-relaxed">L'historique est calculé automatiquement en additionnant l'historique de chaque ligne.</p>
+                    </Card>
+                  ) : (
+                    <Card className="h-fit border-blue-200 bg-blue-50">
+                      <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2"><Edit size={20}/> Mettre à jour</h3>
+                      <form onSubmit={handleUpdateBalance} className="space-y-4">
+                        <input type="number" step="0.01" className="w-full p-3 rounded-lg border border-blue-200" value={currentBalanceUpdate} onChange={(e) => setCurrentBalanceUpdate(e.target.value)} />
+                        <Button type="submit" className="w-full">Valider</Button>
+                      </form>
+                    </Card>
+                  )}
+                  {!isComposite && (
+                    <Card className="h-fit bg-slate-50/50 border-slate-200">
+                      <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Point passé</h3>
+                      <form onSubmit={handleAddAssetHistory} className="space-y-4">
+                        <input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.date} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, date: e.target.value})} />
+                        <input type="number" step="0.01" className="w-full p-2 rounded-lg border border-slate-300" value={newAssetHistoryPoint.value} onChange={(e) => setNewAssetHistoryPoint({...newAssetHistoryPoint, value: e.target.value})} />
+                        <Button type="submit" className="w-full" variant="secondary">Enregistrer</Button>
+                      </form>
+                    </Card>
+                  )}
                 </div>
-              )}
-              {activeTab === 'analysis' && <div className="flex flex-col h-full"><Button onClick={handleAnalyzeAsset} disabled={isAnalyzing} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg mx-auto mb-6">{isAnalyzing ? <Loader2 className="animate-spin" size={18} /> : <Sparkles className="mr-2" size={18} />} Lancer l'analyse</Button>{aiAnalysis && <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 overflow-y-auto max-h-[400px]"><MessageBubble message={{ role: 'assistant', content: aiAnalysis }} /></div>}</div>}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="border-slate-200">
+                    <h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3>
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={assetChartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                          <RechartsTooltip formatter={(val) => formatCurrency(val)} />
+                          <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={3} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                  <Card className="overflow-hidden border-slate-200 p-0">
+                    <div className="bg-slate-50 p-4 border-b border-slate-100 font-bold">Historique Global</div>
+                    <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
+                      {(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
+                        <div key={idx} className="p-3 flex justify-between items-center group hover:bg-slate-50">
+                          <span className="text-sm text-slate-600 flex items-center gap-2">
+                            {new Date(point.date).toLocaleDateString()}
+                            {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>}
+                          </span>
+                          <div className="flex items-center gap-4">
+                            <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
+                            {!isComposite && <button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* CONTENU ONGLET : ANALYSE */}
+            {activeTab === 'analysis' && (
+              <div className="flex flex-col h-full animate-in fade-in duration-300">
+                <Button onClick={handleAnalyzeAsset} disabled={isAnalyzing} className="mx-auto mb-6 bg-indigo-600 text-white">
+                  {isAnalyzing ? <Loader2 className="animate-spin" size={18} /> : <Sparkles className="mr-2" size={18} />} Lancer l'analyse
+                </Button>
+                {aiAnalysis && <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 overflow-y-auto max-h-[400px]"><MessageBubble message={{ role: 'assistant', content: aiAnalysis }} /></div>}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* --- VUE DÉTAIL D'UNE POSITION --- */}
+      {viewMode === 'position' && selectedPosition && (
+        <>
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50">
+            <div>
+              <button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2>
             </div>
-          </>
-        )}
-        {viewMode === 'position' && selectedPosition && (
-          <>
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50"><div><button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2></div><div className="text-right"><p className="text-sm text-slate-500">Valeur Actuelle</p><p className="text-3xl font-bold text-purple-600">{formatCurrency(selectedPosition.value)}</p></div></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50"><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><Card className="h-fit bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3><form onSubmit={handleAddPositionHistory} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur (€)</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} /></div><Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700">Enregistrer</Button></form></Card><div className="lg:col-span-2 space-y-6"><Card className="border-slate-200"><h3 className="font-bold text-slate-800 mb-4">Performance</h3><div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={positionChartData}><defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" /><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} /><RechartsTooltip 
-            contentStyle={{ 
-              borderRadius: '12px', 
-              border: 'none', 
-              backgroundColor: 'rgba(255, 255, 255, 0.8)',
-              backdropFilter: 'blur(4px)',
-              fontSize: '12px',
-              padding: '8px 12px',
-              boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
-            }}
-            offset={25}
-            allowEscapeViewBox={{ x: false, y: true }}
-            wrapperStyle={{ pointerEvents: 'none' }}
-            formatter={(value) => [formatCurrency(value), 'Valorisation']} 
-          /><ReferenceLine x={new Date().toISOString().split('T')[0]} stroke="#f59e0b" strokeDasharray="3 3" /><Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" /></AreaChart></ResponsiveContainer></div></Card><Card className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-slate-800">Historique de la ligne</h3></div><div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">{(!selectedPosition.history || selectedPosition.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...selectedPosition.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (<div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 text-sm group"><span className="text-slate-600 flex items-center gap-2">{new Date(point.date).toLocaleDateString()} {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Prév.</span>}</span><div className="flex items-center gap-4"><span className="font-bold text-slate-900">{formatCurrency(point.value)}</span><div className="hidden group-hover:flex gap-1"><button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button></div></div></div>))}</div></Card></div></div></div>
-          </>
-        )}
-      </div>
+            <div className="text-right">
+              <p className="text-sm text-slate-500">Valeur Actuelle (Marché)</p>
+              <p className="text-3xl font-bold text-purple-600">{formatCurrency(selectedPosition.value)}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 py-4 bg-white border-b border-slate-100">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Total Versé</p>
+              <p className="text-sm font-bold text-slate-700">{formatCurrency(selectedPosition.totalInvested || 0)}</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Performance</p>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-bold ${(selectedPosition.value - (selectedPosition.totalInvested || 0)) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(selectedPosition.value - (selectedPosition.totalInvested || 0))}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${(selectedPosition.value - (selectedPosition.totalInvested || 0)) >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{selectedPosition.totalInvested > 0 ? (((selectedPosition.value - selectedPosition.totalInvested) / selectedPosition.totalInvested) * 100).toFixed(2) : 0}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card className="h-fit bg-slate-50/50 border-slate-200">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20} className="text-purple-600"/> Évolution</h3>
+                <form onSubmit={handleAddPositionHistory} className="space-y-4">
+                  <input type="date" className="w-full p-2 rounded-lg border border-slate-300" value={newPosHistoryPoint.date} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, date: e.target.value})} />
+                  <input type="number" className="w-full p-2 rounded-lg border border-slate-300" placeholder="0.00" value={newPosHistoryPoint.value} onChange={(e) => setNewPosHistoryPoint({...newPosHistoryPoint, value: e.target.value})} />
+                  <Button type="submit" className="w-full justify-center bg-purple-600 hover:bg-purple-700 text-white">Enregistrer</Button>
+                </form>
+              </Card>
+
+              <div className="lg:col-span-2 space-y-6">
+                <Card className="border-slate-200">
+                  <h3 className="font-bold text-slate-800 mb-4">Performance Historique</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={positionChartData}>
+                        <defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="date" tick={{fontSize: 12}} />
+                        <YAxis tick={{fontSize: 12}} />
+                        <RechartsTooltip formatter={(val) => formatCurrency(val)} />
+                        <Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+                <Card className="overflow-hidden border-slate-200 p-0">
+                  <div className="bg-slate-50 p-4 border-b border-slate-100 font-bold">Historique de la ligne</div>
+                  <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">
+                    {[...(selectedPosition.history || [])].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
+                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 group">
+                        <span className="text-sm text-slate-600 flex items-center gap-2">
+                          {new Date(point.date).toLocaleDateString()}
+                          {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>}
+                        </span>
+                        <div className="flex items-center gap-4">
+                          <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
+                          <button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction, userProfile }) => {
@@ -1481,19 +1796,60 @@ const AssetsView = ({ assets, setAssets }) => {
 
   const handleAdd = (e) => {
     e.preventDefault();
+    // On vérifie que le nom est bien saisi
     if (!newAsset.name) return;
+
     const isComposite = isCompositeType(newAsset.type);
-    if (!isComposite && !newAsset.value) return;
-    const initialValue = isComposite ? 0 : parseFloat(newAsset.value);
     const today = new Date().toISOString().split('T')[0];
-    const newAssetObj = { ...newAsset, id: Date.now(), value: initialValue, history: [{ date: today, value: initialValue }] };
-    setAssets([...(assets || []), newAssetObj]);
+    
+    // Si c'est un compte Bourse/Investissement, on crée la poche Cash (Espèces)
+    // Elle aura 'isCash: true' pour être identifiée par nos nouveaux KPI et filtres
+    const initialPositions = isComposite ? [
+      { 
+        id: 'cash_pouch', 
+        name: '💰 Espèces', 
+        value: 0, 
+        isCash: true, 
+        history: [{ date: today, value: 0 }] 
+      }
+    ] : [];
+
+    // La valeur initiale globale est 0 pour un PEA (car elle dépend des positions/cash)
+    // Pour un Livret, on prend la valeur saisie dans le formulaire
+    const initialValue = isComposite ? 0 : (parseFloat(newAsset.value) || 0);
+
+    const newAssetObj = { 
+      ...newAsset, 
+      id: Date.now(), 
+      value: initialValue, 
+      positions: initialPositions,
+      history: [{ date: today, value: initialValue }] 
+    };
+
+    // Mise à jour de l'état local et sauvegarde en base de données
+    const updatedAssets = [...(assets || []), newAssetObj];
+    setAssets(updatedAssets);
+    
+    // Réinitialisation du formulaire
     setNewAsset({ name: '', institution: '', value: '', type: 'liquidite' });
     setIsFormOpen(false);
   };
 
   const handleDelete = (id) => setAssets(assets.filter(a => a.id !== id));
-  const handleUpdateAsset = (updatedAsset) => { setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a)); setSelectedAsset(updatedAsset); };
+  const handleUpdateAsset = (updatedAsset) => {
+    // Si c'est un investissement, on s'assure qu'il y a une poche espèces
+    if (['investissement', 'epargne_salariale', 'crypto'].includes(updatedAsset.type)) {
+      const hasCash = updatedAsset.positions?.some(p => p.isCash);
+      if (!hasCash) {
+        updatedAsset.positions = [
+          { id: 'cash_pouch', name: '💰 Espèces non investies', value: 0, isCash: true, history: [] },
+          ...(updatedAsset.positions || [])
+        ];
+      }
+    }
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    setSelectedAsset(updatedAsset);
+  };
   const groupedAssets = useMemo(() => { const groups = {}; assets.forEach(asset => { if (!groups[asset.type]) groups[asset.type] = []; groups[asset.type].push(asset); }); return groups; }, [assets]);
 
   return (
@@ -1550,7 +1906,11 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   const [focusedTxId, setFocusedTxId] = useState(null);
 
   const cashflowHistoryData = useMemo(() => processFlowData(timeRange, transactions), [timeRange, transactions]);
-  const liquidAssets = useMemo(() => assets ? assets.filter(a => a.type === 'liquidite') : [], [assets]);
+  
+  const selectableAccounts = useMemo(() => 
+    assets ? assets.filter(a => ['liquidite', 'investissement', 'epargne_salariale', 'crypto'].includes(a.type)) : [], 
+    [assets]
+  );
   const hasFlowData = useMemo(() => cashflowHistoryData.some(d => d.revenus > 0 || d.depenses > 0), [cashflowHistoryData]);
 
   const handleAdd = (e) => {
@@ -1609,7 +1969,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   const handleAiParse = async () => {
     if (!aiInput) return;
     setIsAiProcessing(true);
-    const accountNames = liquidAssets.map(a => a.name).join(', ');
+    const accountNames = selectableAccounts.map(a => a.name).join(', ');
     const userPrompt = `CONTEXTE :
     - Comptes disponibles : ${accountNames}.
     - Catégories autorisées : ${Object.keys(EXPENSE_CATEGORIES).join(', ')}.
@@ -1650,16 +2010,16 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       
       if (data.type === 'transfer') {
         if (data.accountFrom) {
-          const foundFrom = liquidAssets.find(a => a.name.toLowerCase() === data.accountFrom.toLowerCase());
+          const foundFrom = selectableAccounts.find(a => a.name.toLowerCase() === data.accountFrom.toLowerCase());
           if (foundFrom) setSelectedAccount(foundFrom.id);
         }
         if (data.accountTo) {
-          const foundTo = liquidAssets.find(a => a.name.toLowerCase() === data.accountTo.toLowerCase());
+          const foundTo = selectableAccounts.find(a => a.name.toLowerCase() === data.accountTo.toLowerCase());
           if (foundTo) setTransferTo(foundTo.id);
         }
       } else {
         if (data.accountName) {
-          const found = liquidAssets.find(a => a.name.toLowerCase() === data.accountName.toLowerCase());
+          const found = selectableAccounts.find(a => a.name.toLowerCase() === data.accountName.toLowerCase());
           if (found) setSelectedAccount(found.id);
         }
       }
@@ -1673,10 +2033,10 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
         <Card className="bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
         <Card className="sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
         
-        <div><label className="block text-xs font-semibold text-slate-600 mb-1">{newTrans.type === 'transfer' ? "Compte Débité (Source)" : "Compte (Optionnel)"}</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        <div><label className="block text-xs font-semibold text-slate-600 mb-1">{newTrans.type === 'transfer' ? "Compte Débité (Source)" : "Compte (Optionnel)"}</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{selectableAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         
         {newTrans.type === 'transfer' && (
-          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Compte Crédité (Destination)</label><select className="w-full p-2 rounded-lg border border-slate-300" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}><option value="">-- Aucun --</option>{liquidAssets.filter(a => a.id != selectedAccount).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          <div><label className="block text-xs font-semibold text-slate-600 mb-1">Compte Crédité (Destination)</label><select className="w-full p-2 rounded-lg border border-slate-300" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}><option value="">-- Aucun --</option>{selectableAccounts.filter(a => a.id != selectedAccount).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         )}
         
         <div><label className="block text-xs font-semibold text-slate-600 mb-1">Montant</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.amount} onChange={(e) => setNewTrans({...newTrans, amount: e.target.value})} /></div><div><label className="block text-xs font-semibold text-slate-600 mb-1">Libellé</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newTrans.label} onChange={(e) => setNewTrans({...newTrans, label: e.target.value})} /></div>
@@ -2345,13 +2705,35 @@ const showToast = (msg) => setToast({ message: msg });
   
   const updateAssetHistoryWithDelta = (asset, date, delta) => {
     const prevHistory = asset.history || [];
-    let updatedHistory = prevHistory.map(h => { if (new Date(h.date) >= new Date(date)) { return { ...h, value: h.value + delta }; } return h; });
+    let updatedHistory = prevHistory.map(h => { 
+      if (new Date(h.date) >= new Date(date)) { 
+        // Si c'est un investissement et que le delta est positif (virement entrant), 
+        // on augmente aussi la valeur investie
+        const isInvestedCompte = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+        const investedDelta = isInvestedCompte ? delta : 0;
+        return { 
+          ...h, 
+          value: parseFloat((h.value + delta).toFixed(2)),
+          investedValue: (h.investedValue || h.value) + investedDelta
+        }; 
+      } 
+      return h; 
+    });
+    
     const exists = updatedHistory.some(h => h.date === date);
     if (!exists) {
-        const sorted = [...updatedHistory].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const previousEntry = [...sorted].reverse().find(h => new Date(h.date) < new Date(date));
-        const baseValue = previousEntry ? previousEntry.value : 0; 
-        updatedHistory.push({ date: date, value: baseValue + delta });
+      const sorted = [...updatedHistory].sort((a,b) => new Date(a.date) - new Date(b.date));
+      const previousEntry = [...sorted].reverse().find(h => new Date(h.date) < new Date(date));
+      const baseValue = previousEntry ? previousEntry.value : 0; 
+      const baseInvested = previousEntry ? (previousEntry.investedValue || previousEntry.value) : 0;
+      const isInvestedCompte = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      const investedDelta = isInvestedCompte ? delta : 0;
+      
+      updatedHistory.push({ 
+        date: date, 
+        value: parseFloat((baseValue + delta).toFixed(2)),
+        investedValue: baseInvested + investedDelta
+      });
     }
     updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
     return updatedHistory;
@@ -2359,37 +2741,48 @@ const showToast = (msg) => setToast({ message: msg });
 
   const handleCreateTransaction = (transaction, impactedAssetId) => {
     if (transaction.type === 'transfer') {
-        const newTransaction = { ...transaction };
-        const newTransactions = [newTransaction, ...transactions];
-        setTransactions(newTransactions); saveTransactions(newTransactions);
+      const newTransactions = [transaction, ...transactions];
+      setTransactions(newTransactions); saveTransactions(newTransactions);
 
-        let currentAssets = [...assets];
+      let currentAssets = [...assets];
+      
+      const updateTargetAsset = (assetId, amount) => {
+        const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
+        if (idx === -1) return;
+
+        const asset = currentAssets[idx];
+        const delta = amount;
         
-        // 1. Source Update (Decrement)
-        if (transaction.fromId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.fromId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = -transaction.amount;
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
+        // On s'assure que les positions existent pour les comptes composites
+        let positions = asset.positions || [];
+        const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+        
+        if (isComposite) {
+          // Si le compte est composite mais n'a pas de poche cash, on la crée
+          if (!positions.some(p => p.isCash)) {
+            positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
+          }
+          // On met à jour la poche cash
+          positions = positions.map(p => 
+            p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
+          );
         }
-        
-        // 2. Dest Update (Increment)
-        if (transaction.toId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.toId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = transaction.amount;
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
-        
-        setAssets(currentAssets);
-        saveAssets(currentAssets);
-        return;
+
+        const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
+        currentAssets[idx] = { 
+          ...asset, 
+          value: parseFloat((asset.value + delta).toFixed(2)), 
+          positions: positions, 
+          history: updatedHistory 
+        };
+      };
+
+      if (transaction.fromId) updateTargetAsset(transaction.fromId, -transaction.amount);
+      if (transaction.toId) updateTargetAsset(transaction.toId, transaction.amount);
+      
+      setAssets(currentAssets);
+      saveAssets(currentAssets);
+      return;
     }
 
     const newTransaction = { ...transaction, linkedAssetId: impactedAssetId };
@@ -2401,11 +2794,26 @@ const showToast = (msg) => setToast({ message: msg });
       if (assetIndex !== -1) {
         const asset = assets[assetIndex];
         let delta = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
-        const newCurrentValue = asset.value + delta;
+        
+        // CORRECTION : On met aussi à jour la poche Cash interne si elle existe
+        const updatedPositions = (asset.positions || []).map(p => 
+          p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
+        );
+
+        const newCurrentValue = parseFloat((asset.value + delta).toFixed(2));
         const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-        const updatedAsset = { ...asset, value: newCurrentValue, history: updatedHistory };
-        const newAssets = [...assets]; newAssets[assetIndex] = updatedAsset;
-        setAssets(newAssets); saveAssets(newAssets);
+        
+        const updatedAsset = { 
+          ...asset, 
+          value: newCurrentValue, 
+          positions: updatedPositions,
+          history: updatedHistory 
+        };
+        
+        const newAssets = [...assets]; 
+        newAssets[assetIndex] = updatedAsset;
+        setAssets(newAssets); 
+        saveAssets(newAssets);
       }
     }
   };
@@ -2416,64 +2824,41 @@ const showToast = (msg) => setToast({ message: msg });
 
     let currentAssets = [...assets];
 
-    // 1. REVERT ORIGINAL IMPACT
+    // Helper interne pour appliquer un delta sur un actif et son cash
+    const applyDeltaToAsset = (assetId, date, delta) => {
+      const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
+      if (idx === -1) return;
+      const asset = currentAssets[idx];
+      
+      const updatedPositions = (asset.positions || []).map(p => 
+        p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
+      );
+      const updatedHistory = updateAssetHistoryWithDelta(asset, date, delta);
+      
+      currentAssets[idx] = { 
+        ...asset, 
+        value: parseFloat((asset.value + delta).toFixed(2)), 
+        positions: updatedPositions,
+        history: updatedHistory 
+      };
+    };
+
+    // 1. ANNULER L'IMPACT ORIGINAL
     if (originalTransaction.type === 'transfer') {
-        if (originalTransaction.fromId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.fromId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = originalTransaction.amount; // Add back
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
-        if (originalTransaction.toId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.toId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = -originalTransaction.amount; // Remove
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
+      if (originalTransaction.fromId) applyDeltaToAsset(originalTransaction.fromId, originalTransaction.date, originalTransaction.amount);
+      if (originalTransaction.toId) applyDeltaToAsset(originalTransaction.toId, originalTransaction.date, -originalTransaction.amount);
     } else if (originalTransaction.linkedAssetId) {
-        const idx = currentAssets.findIndex(a => a.id.toString() === originalTransaction.linkedAssetId.toString());
-        if (idx !== -1) {
-            const asset = currentAssets[idx];
-            let reverseDelta = originalTransaction.type === 'expense' ? originalTransaction.amount : -originalTransaction.amount;
-            const updatedHistory = updateAssetHistoryWithDelta(asset, originalTransaction.date, reverseDelta);
-            currentAssets[idx] = { ...asset, value: asset.value + reverseDelta, history: updatedHistory };
-        }
+      let reverseDelta = originalTransaction.type === 'expense' ? originalTransaction.amount : -originalTransaction.amount;
+      applyDeltaToAsset(originalTransaction.linkedAssetId, originalTransaction.date, reverseDelta);
     }
 
-    // 2. APPLY NEW IMPACT
+    // 2. APPLIQUER LE NOUVEL IMPACT
     if (updatedTransaction.type === 'transfer') {
-        if (updatedTransaction.fromId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.fromId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = -updatedTransaction.amount; // Deduct
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
-        if (updatedTransaction.toId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.toId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = updatedTransaction.amount; // Add
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
+      if (updatedTransaction.fromId) applyDeltaToAsset(updatedTransaction.fromId, updatedTransaction.date, -updatedTransaction.amount);
+      if (updatedTransaction.toId) applyDeltaToAsset(updatedTransaction.toId, updatedTransaction.date, updatedTransaction.amount);
     } else if (updatedTransaction.linkedAssetId) {
-        const idx = currentAssets.findIndex(a => a.id.toString() === updatedTransaction.linkedAssetId.toString());
-        if (idx !== -1) {
-            const asset = currentAssets[idx];
-            let delta = updatedTransaction.type === 'expense' ? -updatedTransaction.amount : updatedTransaction.amount;
-            const updatedHistory = updateAssetHistoryWithDelta(asset, updatedTransaction.date, delta);
-            currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-        }
+      let delta = updatedTransaction.type === 'expense' ? -updatedTransaction.amount : updatedTransaction.amount;
+      applyDeltaToAsset(updatedTransaction.linkedAssetId, updatedTransaction.date, delta);
     }
 
     setAssets(currentAssets);
@@ -2493,27 +2878,29 @@ const showToast = (msg) => setToast({ message: msg });
     if (transaction.type === 'transfer') {
         let currentAssets = [...assets];
         
-        // Reverse Source (Increment)
-        if (transaction.fromId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.fromId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = transaction.amount; // Add back
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
+        const updateTargetAssetDelete = (assetId, amount) => {
+             const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
+             if (idx === -1) return;
+
+             const asset = currentAssets[idx];
+             
+             // MISE À JOUR DU CASH INTERNE
+             const updatedPositions = (asset.positions || []).map(p => 
+               p.isCash ? { ...p, value: parseFloat((p.value + amount).toFixed(2)) } : p
+             );
+
+             const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, amount);
+             currentAssets[idx] = { 
+               ...asset, 
+               value: parseFloat((asset.value + amount).toFixed(2)), 
+               positions: updatedPositions,
+               history: updatedHistory 
+             };
+        };
         
-        // Reverse Dest (Decrement)
-        if (transaction.toId) {
-             const idx = currentAssets.findIndex(a => a.id.toString() === transaction.toId.toString());
-             if (idx !== -1) {
-                 const asset = currentAssets[idx];
-                 const delta = -transaction.amount; // Remove
-                 const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-                 currentAssets[idx] = { ...asset, value: asset.value + delta, history: updatedHistory };
-             }
-        }
+        // Si on supprime un virement, on rend l'argent à la source (+amount) et on le retire de la destination (-amount)
+        if (transaction.fromId) updateTargetAssetDelete(transaction.fromId, transaction.amount);
+        if (transaction.toId) updateTargetAssetDelete(transaction.toId, -transaction.amount);
         
         setAssets(currentAssets);
         saveAssets(currentAssets);
@@ -2525,11 +2912,26 @@ const showToast = (msg) => setToast({ message: msg });
        if (assetIndex !== -1) {
           const asset = assets[assetIndex];
           let reverseDelta = transaction.type === 'expense' ? transaction.amount : -transaction.amount;
-          const newCurrentValue = asset.value + reverseDelta;
+          
+          // CORRECTION : On répercute l'annulation sur la poche Cash
+          const updatedPositions = (asset.positions || []).map(p => 
+            p.isCash ? { ...p, value: parseFloat((p.value + reverseDelta).toFixed(2)) } : p
+          );
+
+          const newCurrentValue = parseFloat((asset.value + reverseDelta).toFixed(2));
           const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, reverseDelta);
-          const updatedAsset = { ...asset, value: newCurrentValue, history: updatedHistory };
-          const newAssets = [...assets]; newAssets[assetIndex] = updatedAsset;
-          setAssets(newAssets); saveAssets(newAssets);
+          
+          const updatedAsset = { 
+            ...asset, 
+            value: newCurrentValue, 
+            positions: updatedPositions,
+            history: updatedHistory 
+          };
+          
+          const newAssets = [...assets]; 
+          newAssets[assetIndex] = updatedAsset;
+          setAssets(newAssets); 
+          saveAssets(newAssets);
        }
     }
   };
@@ -2560,92 +2962,74 @@ const showToast = (msg) => setToast({ message: msg });
   };
 
   const triggerMonthlyProcess = async (currentUser, profile, monthKey, isManual = false) => {
-    console.log("🚀 ÉTAPE 1: Lancement du processus pour", monthKey); //
-    
-    // Sécurité : Vérification des données
-    if (!assets || !transactions) {
-      console.log("❌ ÉCHEC: Données Assets ou Transactions manquantes"); //
-      return;
-    }
+    if (!assets || !transactions) return;
 
-    // IA : Analyse avec formatage HTML strict pour le mail
-    console.log("🤖 ÉTAPE 2: Appel à Gemini..."); //
     const aiSummary = await callGeminiAPI(
       "Tu es un expert financier. Analyse ces données et fais un résumé court (10 lignes max). " +
-      "IMPORTANT : N'utilise JAMAIS de Markdown (pas de * ni de **). " +
-      "Utilise uniquement : <br/> pour les retours à la ligne, <b> pour le gras, et <ul>/<li> pour les listes.",
-      `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions?.slice(0,10))}`
+      "IMPORTANT : N'utilise JAMAIS de Markdown. Utilise uniquement : <br/>, <b>, et <ul>/<li>.",
+      `Patrimoine actuel: ${JSON.stringify(assets)}. Transactions: ${JSON.stringify(transactions?.slice(0, 10))}`
     );
-    
-    // Log de succès de l'IA
-    console.log("✅ IA a répondu"); //
 
-    // Préparation des données brutes pour la sauvegarde (formatées pour la lisibilité)
     const backupJSON = JSON.stringify({ assets, transactions, profile, date: monthKey });
 
     try {
-      console.log("📧 ÉTAPE 3: Envoi via EmailJS..."); //
-      
-      // EMAIL : Envoi via EmailJS (Correction : ajout de 'const response')
-      const response = await emailjs.send("service_htd01wn", "template_ac5mdxf", {
+      await emailjs.send("service_htd01wn", "template_ac5mdxf", {
         to_email: profile.email || currentUser.email,
         user_name: profile.firstName,
         month: monthKey,
         report_content: aiSummary,
-        backup_data: backupJSON 
+        backup_data: backupJSON
       });
-      
-      console.log("✉️ RÉPONSE EMAILJS:", response.status, response.text); //
 
-      // BDD : On marque le rapport comme envoyé uniquement si c'est le rapport automatique
-      const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
-      
       if (!isManual) {
-        console.log("💾 Mise à jour de la date en base de données..."); //
+        const profileRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'info');
         await setDoc(profileRef, { lastMonthlyReportDate: monthKey }, { merge: true });
         setUserProfile(prev => ({ ...prev, lastMonthlyReportDate: monthKey }));
       }
-      
-      showToast(isManual ? "Votre rapport a été envoyé par mail !" : "Nouveau bilan mensuel généré et envoyé !");
-      
-    } catch (error) {
-      console.error("❌ Erreur lors du processus :", error); //
-    }
-};
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50"><Loader2 className="animate-spin" /></div>;
-  
-  if (!user) return <LoginScreen 
-        onLogin={handleLogin} 
-        onEmailLogin={handleEmailLogin} 
-        onEmailRegister={handleEmailRegister} 
+      showToast(isManual ? "Votre rapport a été envoyé par mail !" : "Nouveau bilan mensuel généré et envoyé !");
+    } catch (error) {
+      console.error("Erreur lors du processus :", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-50">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <LoginScreen
+        onLogin={handleLogin}
+        onEmailLogin={handleEmailLogin}
+        onEmailRegister={handleEmailRegister}
         onGoogleLogin={handleGoogleLogin}
         onForgotPassword={handleForgotPassword}
-    />;
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 md:pb-0">
-      
-      {/* INACTIVITY MODAL */}
-      <InactivityModal 
-        isOpen={showAutoLogoutModal} 
-        onStayConnected={confirmPresence} 
-      />
+      <InactivityModal isOpen={showAutoLogoutModal} onStayConnected={confirmPresence} />
 
-      <ProfileModal 
-        isOpen={isProfileModalOpen} 
-        onClose={() => setIsProfileModalOpen(false)} 
-        userProfile={userProfile} 
-        onUpdate={handleUpdateProfile} 
-        assets={assets}                 
-        transactions={transactions}     
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        userProfile={userProfile}
+        onUpdate={handleUpdateProfile}
+        assets={assets}
+        transactions={transactions}
         onRestore={handleRestoreBackup}
         onSendReport={() => {
           const today = new Date();
           const monthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
-          // On passe 'true' pour isManual
           triggerMonthlyProcess(user, userProfile, monthKey + " (Manuel)", true);
-      }}
+        }}
       />
 
       {/* TOP NAVIGATION (DESKTOP) */}
@@ -2656,8 +3040,17 @@ const showToast = (msg) => setToast({ message: msg });
             <span className="font-bold text-xl tracking-tight text-slate-800">MyWealth<span className="text-blue-600">.io</span></span>
           </div>
           <div className="flex gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto">
-            {[{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }, { id: 'assets', label: 'Patrimoine', icon: Wallet }, { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}>
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+              { id: 'assets', label: 'Patrimoine', icon: Wallet },
+              { id: 'budget', label: 'Budget & Flux', icon: ArrowRightLeft },
+              { id: 'advisor', label: 'Conseiller IA ✨', icon: Sparkles, magic: true }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+              >
                 <tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} />
                 <span>{tab.label}</span>
               </button>
@@ -2666,7 +3059,7 @@ const showToast = (msg) => setToast({ message: msg });
           <div className="flex items-center gap-3">
             {userProfile ? (
               <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
-                <User size={12} className="text-blue-500"/> {userProfile.firstName}
+                <User size={12} className="text-blue-500" /> {userProfile.firstName}
               </button>
             ) : (
               <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium"><Cloud size={12} /> Sauvegardé</div>
@@ -2678,42 +3071,47 @@ const showToast = (msg) => setToast({ message: msg });
 
       {/* MOBILE TOP BAR */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 h-14 flex items-center justify-between md:hidden">
-         <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg text-white"><TrendingUp size={18} /></div>
-            <span className="font-bold text-lg text-slate-800">MyWealth</span>
-         </div>
-         <div className="flex items-center gap-2">
-            {userProfile && (
-              <button onClick={() => setIsProfileModalOpen(true)} className="p-2 bg-slate-50 rounded-full text-blue-600">
-                <User size={18}/>
-              </button>
-            )}
-            <button onClick={handleLogout} className="p-2 text-slate-400"><LogOut size={18} /></button>
-         </div>
+        <div className="flex items-center gap-2">
+          <div className="bg-blue-600 p-1.5 rounded-lg text-white"><TrendingUp size={18} /></div>
+          <span className="font-bold text-lg text-slate-800">MyWealth</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {userProfile && (
+            <button onClick={() => setIsProfileModalOpen(true)} className="p-2 bg-slate-50 rounded-full text-blue-600">
+              <User size={18} />
+            </button>
+          )}
+          <button onClick={handleLogout} className="p-2 text-slate-400"><LogOut size={18} /></button>
+        </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
         {activeTab === 'dashboard' && <DashboardView assets={assets} transactions={transactions} setActiveTab={setActiveTab} onDeleteTransaction={handleDeleteTransaction} userProfile={userProfile} />}
         {activeTab === 'assets' && <AssetsView assets={assets} setAssets={handleSetAssets} />}
         {activeTab === 'budget' && (
-          <BudgetView 
-            transactions={transactions} 
-            assets={assets} 
-            onAddTransaction={handleCreateTransaction} 
-            onDeleteTransaction={handleDeleteTransaction} 
+          <BudgetView
+            transactions={transactions}
+            assets={assets}
+            onAddTransaction={handleCreateTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
             onUpdateTransaction={handleUpdateTransaction}
           />
         )}
-        {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} userProfile={userProfile}/>}
+        {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} userProfile={userProfile} />}
       </main>
 
       {/* BOTTOM NAVIGATION (MOBILE) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 pb-safe">
         <div className="flex justify-around items-center h-16">
-          {[{ id: 'dashboard', label: 'Accueil', icon: LayoutDashboard }, { id: 'assets', label: 'Actifs', icon: Wallet }, { id: 'budget', label: 'Budget', icon: ArrowRightLeft }, { id: 'advisor', label: 'Conseil', icon: Sparkles, magic: true }].map(tab => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id)} 
+          {[
+            { id: 'dashboard', label: 'Accueil', icon: LayoutDashboard },
+            { id: 'assets', label: 'Actifs', icon: Wallet },
+            { id: 'budget', label: 'Budget', icon: ArrowRightLeft },
+            { id: 'advisor', label: 'Conseil', icon: Sparkles, magic: true }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
             >
               <tab.icon size={20} className={activeTab === tab.id ? (tab.magic ? "text-indigo-500" : "text-blue-600") : ""} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
@@ -2722,7 +3120,7 @@ const showToast = (msg) => setToast({ message: msg });
           ))}
         </div>
       </div>
-    {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} onClose={() => setToast(null)} />}
     </div>
   );
 }
