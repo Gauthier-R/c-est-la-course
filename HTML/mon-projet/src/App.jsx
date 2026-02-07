@@ -781,27 +781,41 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     const amount = parseFloat(movementData.amount);
     if (isNaN(amount) || amount <= 0 || !movementData.positionId) return;
 
-    const cashPos = asset.positions.find(p => p.isCash);
-    const targetPos = asset.positions.find(p => p.id.toString() === movementData.positionId.toString());
-
-    if (!cashPos || !targetPos) return;
+    const today = new Date().toISOString().split('T')[0];
+    const movementType = movementConfig.type; // 'buy' ou 'sell'
 
     const updatedPositions = asset.positions.map(p => {
+      // 1. Mise à jour de la poche Cash
       if (p.isCash) {
-        // Si achat : on retire du cash. Si vente : on ajoute au cash.
-        const delta = movementConfig.type === 'buy' ? -amount : amount;
-        return { ...p, value: p.value + delta };
+        const delta = movementType === 'buy' ? -amount : amount;
+        return { ...p, value: parseFloat((p.value + delta).toFixed(2)) };
       }
+
+      // 2. Mise à jour du support et fusion dans son historique
       if (p.id.toString() === movementData.positionId.toString()) {
-        // Correction ici : on utilise 0 comme valeur par défaut si totalInvested est à 0
         const currentInvested = (typeof p.totalInvested === 'number') ? p.totalInvested : 0;
-        const delta = movementConfig.type === 'buy' ? amount : -amount;
+        const delta = movementType === 'buy' ? amount : -amount;
+        const newValue = parseFloat((p.value + delta).toFixed(2));
         
+        // On met à jour ou on crée le point d'historique pour aujourd'hui
+        let updatedHistory = [...(p.history || [])];
+        const existingIdx = updatedHistory.findIndex(h => h.date === today);
+        
+        if (existingIdx >= 0) {
+          updatedHistory[existingIdx] = { 
+            ...updatedHistory[existingIdx], 
+            value: newValue,
+            movementTag: movementType // On ajoute le tag sur le point existant
+          };
+        } else {
+          updatedHistory.push({ date: today, value: newValue, movementTag: movementType });
+        }
+
         return { 
           ...p, 
-          value: parseFloat((p.value + delta).toFixed(2)),
-          // On ajoute uniquement le montant du mouvement au PRU existant
-          totalInvested: parseFloat((currentInvested + (movementConfig.type === 'buy' ? amount : -amount)).toFixed(2))
+          value: newValue,
+          totalInvested: parseFloat((currentInvested + delta).toFixed(2)),
+          history: updatedHistory
         };
       }
       return p;
@@ -1317,30 +1331,66 @@ return (
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={positionChartData}>
-                        <defs><linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/><stop offset="95%" stopColor="#9333ea" stopOpacity={0}/></linearGradient></defs>
+                        <defs>
+                          <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/>
+                            <stop offset="50%" stopColor="#9333ea" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis dataKey="date" tick={{fontSize: 12}} />
                         <YAxis tick={{fontSize: 12}} />
                         <RechartsTooltip formatter={(val) => formatCurrency(val)} />
                         <Area type="monotone" dataKey="value" stroke="#9333ea" fillOpacity={1} fill="url(#colorPos)" />
+                        
+                        {/* AJOUT : Lignes verticales pour les achats (vert) et ventes (rouge) */}
+                        {(selectedPosition.history || [])
+                          .filter(h => h.movementTag)
+                          .map((h, idx) => (
+                            <ReferenceLine 
+                              key={idx} 
+                              x={h.date} 
+                              stroke={h.movementTag === 'buy' ? '#22c55e' : '#ef4444'} 
+                              strokeWidth={2}
+                              strokeDasharray="3 3"
+                            />
+                        ))}
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </Card>
                 <Card className="overflow-hidden border-slate-200 p-0">
                   <div className="bg-slate-50 p-4 border-b border-slate-100 font-bold">Historique de la ligne</div>
-                  <div className="max-h-[200px] overflow-y-auto divide-y divide-slate-100">
-                    {[...(selectedPosition.history || [])].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
-                      <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 group">
-                        <span className="text-sm text-slate-600 flex items-center gap-2">
-                          {new Date(point.date).toLocaleDateString()}
-                          {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>}
-                        </span>
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
-                          <button onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                  <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
+                    {[...(selectedPosition.history || [])]
+                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .map((point, idx) => (
+                        <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 group">
+                          <span className="text-sm text-slate-600 flex items-center gap-2">
+                            {new Date(point.date).toLocaleDateString()}
+                            
+                            {/* AFFICHAGE DU TAG SI MOUVEMENT */}
+                            {point.movementTag && (
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${point.movementTag === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {point.movementTag === 'buy' ? 'ACHAT' : 'VENTE'}
+                              </span>
+                            )}
+                            
+                            {!point.movementTag && new Date(point.date) > new Date() && (
+                              <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
+                            )}
+                          </span>
+                          
+                          <div className="flex items-center gap-4">
+                            <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
+                            <button 
+                              onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} 
+                              className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                            >
+                              <Trash2 size={14}/>
+                            </button>
+                          </div>
                         </div>
-                      </div>
                     ))}
                   </div>
                 </Card>
@@ -1759,7 +1809,13 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                       </div>
                       <div className="truncate">
                         <p className="font-bold text-slate-800 text-sm truncate">{t.label}</p>
-                        <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                          {/* Ajout du tag Prév. pour les transactions futures */}
+                          {new Date(t.date) > new Date() && (
+                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -2125,6 +2181,10 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                       <p className="font-medium text-slate-800 truncate">{t.label}</p>
                       <div className="flex gap-2 items-center">
                         <p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                        {/* Ajout du tag Prév. */}
+                        {new Date(t.date) > new Date() && (
+                          <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
+                        )}
                         {t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}
                       </div>
                     </div>
@@ -2739,83 +2799,65 @@ const showToast = (msg) => setToast({ message: msg });
     return updatedHistory;
   };
 
+  // --- GESTIONNAIRES DE TRANSACTIONS (VERSION PROJETÉE) ---
+
+  // --- GESTIONNAIRES DE TRANSACTIONS (VERSION TEMPS RÉEL) ---
+
   const handleCreateTransaction = (transaction, impactedAssetId) => {
-    if (transaction.type === 'transfer') {
-      const newTransactions = [transaction, ...transactions];
-      setTransactions(newTransactions); saveTransactions(newTransactions);
+    let currentAssets = [...assets];
 
-      let currentAssets = [...assets];
+    const applyTransactionToAsset = (assetId, date, delta) => {
+      const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
+      if (idx === -1) return;
+
+      const asset = currentAssets[idx];
+      const updatedHistory = updateAssetHistoryWithDelta(asset, date, delta);
       
-      const updateTargetAsset = (assetId, amount) => {
-        const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
-        if (idx === -1) return;
+      // LOGIQUE : On cherche le point le plus récent qui n'est pas dans le futur
+      const today = new Date().toISOString().split('T')[0];
+      const sortedHistory = [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date));
+      const latestPastOrPresent = [...sortedHistory].reverse().find(h => h.date <= today);
+      
+      const currentRealValue = latestPastOrPresent 
+        ? latestPastOrPresent.value 
+        : parseFloat((asset.value + (date <= today ? delta : 0)).toFixed(2));
 
-        const asset = currentAssets[idx];
-        const delta = amount;
-        
-        // On s'assure que les positions existent pour les comptes composites
-        let positions = asset.positions || [];
-        const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
-        
-        if (isComposite) {
-          // Si le compte est composite mais n'a pas de poche cash, on la crée
-          if (!positions.some(p => p.isCash)) {
-            positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
-          }
-          // On met à jour la poche cash
-          positions = positions.map(p => 
-            p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
-          );
+      // Mise à jour de la poche Cash pour les comptes composites
+      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      let positions = asset.positions || [];
+      
+      if (isComposite) {
+        if (!positions.some(p => p.isCash)) {
+          positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
         }
-
-        const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-        currentAssets[idx] = { 
-          ...asset, 
-          value: parseFloat((asset.value + delta).toFixed(2)), 
-          positions: positions, 
-          history: updatedHistory 
-        };
-      };
-
-      if (transaction.fromId) updateTargetAsset(transaction.fromId, -transaction.amount);
-      if (transaction.toId) updateTargetAsset(transaction.toId, transaction.amount);
-      
-      setAssets(currentAssets);
-      saveAssets(currentAssets);
-      return;
-    }
-
-    const newTransaction = { ...transaction, linkedAssetId: impactedAssetId };
-    const newTransactions = [newTransaction, ...transactions];
-    setTransactions(newTransactions); saveTransactions(newTransactions);
-
-    if (impactedAssetId) {
-      const assetIndex = assets.findIndex(a => a.id.toString() === impactedAssetId.toString());
-      if (assetIndex !== -1) {
-        const asset = assets[assetIndex];
-        let delta = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
         
-        // CORRECTION : On met aussi à jour la poche Cash interne si elle existe
-        const updatedPositions = (asset.positions || []).map(p => 
-          p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
+        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
+        positions = positions.map(p => 
+          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
         );
-
-        const newCurrentValue = parseFloat((asset.value + delta).toFixed(2));
-        const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, delta);
-        
-        const updatedAsset = { 
-          ...asset, 
-          value: newCurrentValue, 
-          positions: updatedPositions,
-          history: updatedHistory 
-        };
-        
-        const newAssets = [...assets]; 
-        newAssets[assetIndex] = updatedAsset;
-        setAssets(newAssets); 
-        saveAssets(newAssets);
       }
+
+      currentAssets[idx] = { 
+        ...asset, 
+        value: currentRealValue, 
+        positions: positions, 
+        history: updatedHistory 
+      };
+    };
+
+    if (transaction.type === 'transfer') {
+      if (transaction.fromId) applyTransactionToAsset(transaction.fromId, transaction.date, -transaction.amount);
+      if (transaction.toId) applyTransactionToAsset(transaction.toId, transaction.date, transaction.amount);
+    } else if (impactedAssetId) {
+      const delta = transaction.type === 'expense' ? -transaction.amount : transaction.amount;
+      applyTransactionToAsset(impactedAssetId, transaction.date, delta);
     }
+
+    const newTransactions = [transaction, ...transactions];
+    setTransactions(newTransactions);
+    saveTransactions(newTransactions);
+    setAssets(currentAssets);
+    saveAssets(currentAssets);
   };
 
   const handleUpdateTransaction = (updatedTransaction) => {
@@ -2823,36 +2865,39 @@ const showToast = (msg) => setToast({ message: msg });
     if (!originalTransaction) return;
 
     let currentAssets = [...assets];
+    const today = new Date().toISOString().split('T')[0];
 
-    // Helper interne pour appliquer un delta sur un actif et son cash
     const applyDeltaToAsset = (assetId, date, delta) => {
       const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
       if (idx === -1) return;
       const asset = currentAssets[idx];
       
-      const updatedPositions = (asset.positions || []).map(p => 
-        p.isCash ? { ...p, value: parseFloat((p.value + delta).toFixed(2)) } : p
-      );
       const updatedHistory = updateAssetHistoryWithDelta(asset, date, delta);
+      const sortedHistory = [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date));
+      const latestPastOrPresent = [...sortedHistory].reverse().find(h => h.date <= today);
+      const currentRealValue = latestPastOrPresent ? latestPastOrPresent.value : asset.value;
+
+      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      let positions = asset.positions || [];
       
-      currentAssets[idx] = { 
-        ...asset, 
-        value: parseFloat((asset.value + delta).toFixed(2)), 
-        positions: updatedPositions,
-        history: updatedHistory 
-      };
+      if (isComposite) {
+        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
+        positions = positions.map(p => 
+          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
+        );
+      }
+
+      currentAssets[idx] = { ...asset, value: currentRealValue, positions, history: updatedHistory };
     };
 
-    // 1. ANNULER L'IMPACT ORIGINAL
     if (originalTransaction.type === 'transfer') {
       if (originalTransaction.fromId) applyDeltaToAsset(originalTransaction.fromId, originalTransaction.date, originalTransaction.amount);
       if (originalTransaction.toId) applyDeltaToAsset(originalTransaction.toId, originalTransaction.date, -originalTransaction.amount);
     } else if (originalTransaction.linkedAssetId) {
-      let reverseDelta = originalTransaction.type === 'expense' ? originalTransaction.amount : -originalTransaction.amount;
-      applyDeltaToAsset(originalTransaction.linkedAssetId, originalTransaction.date, reverseDelta);
+      let revDelta = originalTransaction.type === 'expense' ? originalTransaction.amount : -originalTransaction.amount;
+      applyDeltaToAsset(originalTransaction.linkedAssetId, originalTransaction.date, revDelta);
     }
 
-    // 2. APPLIQUER LE NOUVEL IMPACT
     if (updatedTransaction.type === 'transfer') {
       if (updatedTransaction.fromId) applyDeltaToAsset(updatedTransaction.fromId, updatedTransaction.date, -updatedTransaction.amount);
       if (updatedTransaction.toId) applyDeltaToAsset(updatedTransaction.toId, updatedTransaction.date, updatedTransaction.amount);
@@ -2863,77 +2908,54 @@ const showToast = (msg) => setToast({ message: msg });
 
     setAssets(currentAssets);
     saveAssets(currentAssets);
-
-    const newTransactionsList = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
-    setTransactions(newTransactionsList);
-    saveTransactions(newTransactionsList);
+    const newTxList = transactions.map(t => t.id === updatedTransaction.id ? updatedTransaction : t);
+    setTransactions(newTxList);
+    saveTransactions(newTxList);
   };
 
   const handleDeleteTransaction = (transactionId) => {
     const transaction = transactions.find(t => t.id === transactionId);
     if (!transaction) return;
-    const newTransactions = transactions.filter(t => t.id !== transactionId);
-    setTransactions(newTransactions); saveTransactions(newTransactions);
+    
+    let currentAssets = [...assets];
+    const today = new Date().toISOString().split('T')[0];
+
+    const applyDeltaToAsset = (assetId, date, delta) => {
+      const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
+      if (idx === -1) return;
+      const asset = currentAssets[idx];
+      
+      const updatedHistory = updateAssetHistoryWithDelta(asset, date, delta);
+      const sortedHistory = [...updatedHistory].sort((a, b) => a.date.localeCompare(b.date));
+      const latestPastOrPresent = [...sortedHistory].reverse().find(h => h.date <= today);
+      const currentRealValue = latestPastOrPresent ? latestPastOrPresent.value : asset.value;
+
+      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      let positions = asset.positions || [];
+      
+      if (isComposite) {
+        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
+        positions = positions.map(p => 
+          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
+        );
+      }
+
+      currentAssets[idx] = { ...asset, value: currentRealValue, positions, history: updatedHistory };
+    };
 
     if (transaction.type === 'transfer') {
-        let currentAssets = [...assets];
-        
-        const updateTargetAssetDelete = (assetId, amount) => {
-             const idx = currentAssets.findIndex(a => a.id.toString() === assetId.toString());
-             if (idx === -1) return;
-
-             const asset = currentAssets[idx];
-             
-             // MISE À JOUR DU CASH INTERNE
-             const updatedPositions = (asset.positions || []).map(p => 
-               p.isCash ? { ...p, value: parseFloat((p.value + amount).toFixed(2)) } : p
-             );
-
-             const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, amount);
-             currentAssets[idx] = { 
-               ...asset, 
-               value: parseFloat((asset.value + amount).toFixed(2)), 
-               positions: updatedPositions,
-               history: updatedHistory 
-             };
-        };
-        
-        // Si on supprime un virement, on rend l'argent à la source (+amount) et on le retire de la destination (-amount)
-        if (transaction.fromId) updateTargetAssetDelete(transaction.fromId, transaction.amount);
-        if (transaction.toId) updateTargetAssetDelete(transaction.toId, -transaction.amount);
-        
-        setAssets(currentAssets);
-        saveAssets(currentAssets);
-        return;
+        if (transaction.fromId) applyDeltaToAsset(transaction.fromId, transaction.date, transaction.amount);
+        if (transaction.toId) applyDeltaToAsset(transaction.toId, transaction.date, -transaction.amount);
+    } else if (transaction.linkedAssetId) {
+       let reverseDelta = transaction.type === 'expense' ? transaction.amount : -transaction.amount;
+       applyDeltaToAsset(transaction.linkedAssetId, transaction.date, reverseDelta);
     }
 
-    if (transaction.linkedAssetId) {
-       const assetIndex = assets.findIndex(a => a.id.toString() === transaction.linkedAssetId.toString());
-       if (assetIndex !== -1) {
-          const asset = assets[assetIndex];
-          let reverseDelta = transaction.type === 'expense' ? transaction.amount : -transaction.amount;
-          
-          // CORRECTION : On répercute l'annulation sur la poche Cash
-          const updatedPositions = (asset.positions || []).map(p => 
-            p.isCash ? { ...p, value: parseFloat((p.value + reverseDelta).toFixed(2)) } : p
-          );
-
-          const newCurrentValue = parseFloat((asset.value + reverseDelta).toFixed(2));
-          const updatedHistory = updateAssetHistoryWithDelta(asset, transaction.date, reverseDelta);
-          
-          const updatedAsset = { 
-            ...asset, 
-            value: newCurrentValue, 
-            positions: updatedPositions,
-            history: updatedHistory 
-          };
-          
-          const newAssets = [...assets]; 
-          newAssets[assetIndex] = updatedAsset;
-          setAssets(newAssets); 
-          saveAssets(newAssets);
-       }
-    }
+    const newTransactions = transactions.filter(t => t.id !== transactionId);
+    setTransactions(newTransactions);
+    saveTransactions(newTransactions);
+    setAssets(currentAssets);
+    saveAssets(currentAssets);
   };
 
   const handleRestoreBackup = async (backupData) => {
