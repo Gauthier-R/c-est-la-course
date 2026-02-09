@@ -2550,62 +2550,102 @@ const [toast, setToast] = useState(null);
 const showToast = (msg) => setToast({ message: msg });
 
 
-  // --- AUTO LOGOUT LOGIC ---
+ // --- AUTO LOGOUT LOGIC (VERSION PERSISTANTE) ---
   const [showAutoLogoutModal, setShowAutoLogoutModal] = useState(false);
   const logoutTimerRef = useRef(null);
   const warningTimerRef = useRef(null);
+
+  // Seuils de sécurité
+  const WARNING_THRESHOLD = 5 * 60 * 1000; // Alerte à 5 minutes
+  const LOGOUT_THRESHOLD = 10 * 60 * 1000; // Déconnexion à 10 minutes
+
+  // Fonction pour vérifier si le temps est écoulé (même après un refresh)
+  const checkInactivity = useCallback(() => {
+    if (!user) return;
+
+    const lastActivity = parseInt(localStorage.getItem('lastActivity') || Date.now());
+    const elapsed = Date.now() - lastActivity;
+
+    if (elapsed >= LOGOUT_THRESHOLD) {
+      handleLogout();
+      setShowAutoLogoutModal(false);
+      localStorage.removeItem('lastActivity');
+    } else if (elapsed >= WARNING_THRESHOLD) {
+      setShowAutoLogoutModal(true);
+    }
+  }, [user]);
 
   const startTimers = () => {
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
 
-    // Warning at 5 min
-    warningTimerRef.current = setTimeout(() => {
-      setShowAutoLogoutModal(true);
-    }, 5 * 60 * 1000); 
+    const lastActivity = parseInt(localStorage.getItem('lastActivity') || Date.now());
+    const elapsed = Date.now() - lastActivity;
 
-    // Logout at 10 min
+    // Timer pour l'affichage de la modale d'alerte
+    if (elapsed < WARNING_THRESHOLD) {
+      warningTimerRef.current = setTimeout(() => {
+        setShowAutoLogoutModal(true);
+      }, WARNING_THRESHOLD - elapsed);
+    } else {
+      setShowAutoLogoutModal(true);
+    }
+
+    // Timer pour la déconnexion automatique
     logoutTimerRef.current = setTimeout(() => {
       handleLogout();
       setShowAutoLogoutModal(false);
-    }, 5 * 60 * 1000 + 1);
+      localStorage.removeItem('lastActivity');
+    }, LOGOUT_THRESHOLD - elapsed);
   };
 
   const resetActivity = () => {
-    if (!showAutoLogoutModal) {
-      startTimers();
-    }
+    // Sauvegarde de l'instant T dans la mémoire physique du navigateur
+    localStorage.setItem('lastActivity', Date.now().toString());
+    if (showAutoLogoutModal) setShowAutoLogoutModal(false);
+    startTimers();
+  };
+
+  const confirmPresence = () => {
+    resetActivity(); // Met à jour le localStorage et relance les compteurs
   };
 
   useEffect(() => {
     if (!user) return;
 
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    
-    // Throttle the reset to once per second to improve performance
     let lastRun = Date.now();
+
     const handleUserActivity = () => {
-      if (Date.now() - lastRun > 1000) {
+      // On limite l'écriture en mémoire à une fois toutes les 2 secondes pour les performances
+      if (Date.now() - lastRun > 2000) {
         resetActivity();
         lastRun = Date.now();
       }
     };
 
-    startTimers(); // Initial start
+    // Vérification immédiate au chargement/re-chargement de la page
+    checkInactivity();
+    startTimers();
 
     events.forEach(event => window.addEventListener(event, handleUserActivity));
     
+    // Détection du retour sur l'onglet (crucial pour le verrouillage mobile)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
+        startTimers();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
       events.forEach(event => window.removeEventListener(event, handleUserActivity));
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
       if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
     };
-  }, [user, showAutoLogoutModal]);
-
-  const confirmPresence = () => {
-    setShowAutoLogoutModal(false);
-    startTimers();
-  };
+  }, [user, checkInactivity]);
 
   // --- AUTH STATE & DATA FETCHING ---
 
