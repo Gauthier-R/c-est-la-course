@@ -469,7 +469,10 @@ const Button = ({ onClick, children, variant = "primary", className = "", disabl
 };
 
 const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percentage }) => {
+  // On crée un ID unique et valide (sans espaces) pour le dégradé SVG
+  const gradientId = `grad-${title.replace(/\s+/g, '-')}`;
   const hasData = data && data.length > 0 && data.some(d => d.value > 0);
+
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-slate-300 hover:shadow-md transition-all duration-300 overflow-hidden relative flex flex-col justify-between h-32 md:h-40 hover:border-indigo-200 bg-slate-50/50`}>
       <div className="p-4 md:p-5 relative z-10">
@@ -478,7 +481,9 @@ const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percent
             <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{title}</p>
             <h3 className="text-xl md:text-2xl font-extrabold text-slate-900">{value}</h3>
           </div>
-          <div className={`p-2 rounded-lg bg-white border border-slate-100 shadow-sm text-${color}-600`}><Icon size={20} color={color} /></div>
+          <div className="p-2 rounded-lg bg-white border border-slate-100 shadow-sm">
+            <Icon size={20} style={{ color: color }} />
+          </div>
         </div>
         {percentage && hasData && (
           <div className="mt-2 flex items-center">
@@ -489,20 +494,33 @@ const SparklineCard = ({ title, value, data, dataKey, color, icon: Icon, percent
           </div>
         )}
       </div>
+
+      {/* ZONE DU GRAPHIQUE */}
       <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
               <defs>
-                <linearGradient id={`grad${title}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.5}/>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.6}/>
                   <stop offset="100%" stopColor={color} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} fill={`url(#grad${title})`} />
+              <Area 
+                type="monotone" 
+                dataKey={dataKey} 
+                stroke={color} 
+                strokeWidth={2} 
+                fill={`url(#${gradientId})`} // Utilisation de l'ID nettoyé
+                isAnimationActive={true}
+              />
             </AreaChart>
           </ResponsiveContainer>
-        ) : (<div className="w-full h-full flex items-end justify-center pb-2 opacity-50"><div className="w-full h-1 bg-slate-100"></div></div>)}
+        ) : (
+          <div className="w-full h-full flex items-end justify-center pb-2 opacity-50">
+            <div className="w-full h-1 bg-slate-100"></div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1333,8 +1351,8 @@ return (
                       <AreaChart data={positionChartData}>
                         <defs>
                           <linearGradient id="colorPos" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#9333ea" stopOpacity={0.8}/>
-                            <stop offset="50%" stopColor="#9333ea" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#9333ea" stopOpacity={0.4}/>
+                            <stop offset="90%" stopColor="#9333ea" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -1630,7 +1648,10 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
         <div className="flex gap-2"><Button variant="magic" onClick={handleAnalyzeDashboard} disabled={isAnalyzing} className="text-xs px-3 py-1.5">{isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}{isAnalyzing ? "..." : "Analyser"}</Button><div className="bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex">{['6M', '1Y', '5Y', 'ALL'].map(range => (<button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${timeRange === range ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}>{range === 'ALL' ? 'Tout' : range}</button>))}</div></div>
       </div>
       {aiAnalysis && <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 relative mb-4"><button onClick={() => setAiAnalysis(null)} className="absolute top-2 right-2 text-indigo-400"><X size={16} /></button><div className="flex gap-3"><div className="bg-white p-2 rounded-full h-fit text-indigo-600"><Bot size={20} /></div><div className="text-sm text-indigo-900 whitespace-pre-line">{aiAnalysis}</div></div></div>}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><SparklineCard title="Patrimoine Net" value={`${formatCurrency(netWorth)}`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} /><SparklineCard title="Actifs Financiers" value={`${formatCurrency(investments)}`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} /><SparklineCard title="Liquidités" value={`${formatCurrency(liquidities)}`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <SparklineCard title="Patrimoine Net" value={`${formatCurrency(netWorth)}`} data={netWorthHistory} dataKey="value" color="#3b82f6" icon={Wallet} percentage={netWorthGrowth} />
+        <SparklineCard title="Actifs Financiers" value={`${formatCurrency(investments)}`} data={investmentHistory} dataKey="value" color="#10b981" icon={TrendingUp} percentage={investmentsGrowth} />
+        <SparklineCard title="Liquidités" value={`${formatCurrency(liquidities)}`} data={liquidityHistory} dataKey="value" color="#f59e0b" icon={PiggyBank} percentage={liquiditiesGrowth} /></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <Card className="lg:col-span-2 flex flex-col border-slate-300 min-h-[400px]">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
