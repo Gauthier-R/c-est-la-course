@@ -44,13 +44,13 @@ emailjs.init("OvBeXwPPROzqE2kQL"); // Clef API pour EmailJS
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
-  apiKey: "AIzaSyAAIJslUV8AYV5zejhW-XOC0kPgZoVSLFE",
+  apiKey: "AIzaSyD3EFbSF-t0j3a6cXi-P1RYPe5sc-Yvk5c",
   authDomain: "nodejsfinary.firebaseapp.com",
   projectId: "nodejsfinary",
   storageBucket: "nodejsfinary.firebasestorage.app",
   messagingSenderId: "451755528730",
-  appId: "1:451755528730:web:cd9fbe8e6f802278b0f7a3",
-  measurementId: "G-RK8HF0HQMR"
+  appId: "1:451755528730:web:5140e4835f4bbe98b0f7a3",
+  measurementId: "G-HP09H5QM5N"
 };
 
 // Initialize Firebase

@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+  "dev": "vite",
+  "build": "vite build",
+  "deploy:sim": "npm run build && firebase deploy --only hosting:app-sim",
+  "deploy:prd": "npm run build && firebase deploy --only hosting:app-prd"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
