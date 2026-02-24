@@ -9,7 +9,7 @@ import {
   PlusCircle, Trash2, Building, DollarSign, 
   ArrowUpRight, ArrowDownRight, Sparkles, MessageSquare, Send,
   Bot, Loader2, Calendar, X, Eye, EyeOff, ShieldCheck, Activity,
-  ChevronLeft, History, List, Save, Grid, Circle, TrendingDown, Edit,
+  ChevronLeft, History, List, Save, Grid, Circle, TrendingDown, Edit, Search,
   LogOut, User, Lock, Mail, AlertCircle, ArrowRight, Cloud,
   Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
   Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase,
@@ -218,25 +218,46 @@ const processFlowData = (timeRange, transactions) => {
 async function callGeminiAPI(systemPrompt, userPrompt) {
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          tools: [{ google_search: {} }]
+          // Fail-Safe : Fusion des instructions système et utilisateur pour éviter l'erreur "system_instruction"
+          contents: [{ 
+            role: "user", 
+            parts: [{ text: `INSTRUCTIONS :\n${systemPrompt}\n\nREQUÊTE :\n${userPrompt}` }] 
+          }]
         })
       }
     );
-    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      // On affiche le message d'erreur détaillé de Google pour le diagnostic
+      throw new Error(errorData.error?.message || `Erreur ${response.status}`);
+    }
     const data = await response.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || "Désolé, je n'ai pas pu analyser les données.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Une erreur est survenue avec l'assistant. Vérifiez la clé API.";
+    return `Une erreur est survenue : ${error.message}`;
   }
 }
+
+// Fonction de diagnostic pour lister tes modèles autorisés
+async function listAvailableModels() {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+    const data = await res.json();
+    console.log("--- MODÈLES GEMINI DISPONIBLES ---");
+    data.models?.forEach(m => console.log(m.name));
+    console.log("----------------------------------");
+  } catch (e) {
+    console.error("Erreur listing modèles:", e);
+  }
+}
+// Appelle-la une fois pour voir le résultat dans ta console
+listAvailableModels();
 
 // --- UI COMPONENTS ---
 
@@ -1438,18 +1459,29 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const onPieLeave = () => setActiveIndex(-1);
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterCategory, setFilterCategory] = useState(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(20); // État pour la pagination
 
-  // Calcul des transactions filtrées
-  const filteredTransactions = useMemo(() => {
+  // 1. Filtrage et Tri complet
+  const allFilteredTransactions = useMemo(() => {
     let result = [...(transactions || [])];
-    if (filterMonth) {
-      result = result.filter(t => t.date.startsWith(filterMonth));
+    if (filterMonth) result = result.filter(t => t.date.startsWith(filterMonth));
+    if (filterCategory) result = result.filter(t => t.category === filterCategory);
+    if (searchQuery) {
+      result = result.filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
     }
-    if (filterCategory) {
-      result = result.filter(t => t.category === filterCategory);
-    }
+    result.sort((a, b) => b.date.localeCompare(a.date));
     return result;
-  }, [transactions, filterMonth, filterCategory]);
+  }, [transactions, filterMonth, filterCategory, searchQuery]);
+
+  // 2. Tronquage pour l'affichage selon visibleCount
+  const displayTransactions = useMemo(() => {
+    return allFilteredTransactions.slice(0, visibleCount);
+  }, [allFilteredTransactions, visibleCount]);
+
+  // Réinitialise le compteur si les filtres changent pour revenir en haut de liste
+  useEffect(() => { setVisibleCount(20); }, [filterMonth, filterCategory, searchQuery]);
 
   // Mapping des icônes pour le patrimoine
   const ASSET_ICONS = {
@@ -1798,55 +1830,111 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
         </Card>
         <Card className="flex flex-col relative border-slate-300 h-[560px]"> {/* Hauteur fixe pour éviter l'étirement */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 shrink-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1">
               <List size={20} className="text-blue-600 shrink-0"/> 
               <span className="leading-tight text-lg font-bold text-slate-800">Dernières Opérations</span>
-              {(filterMonth || filterCategory) && (
-                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-100 animate-in fade-in">
+              {(filterMonth || filterCategory || searchQuery) && (
+                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-100">
                   Filtré
                 </span>
               )}
+              <button 
+                onClick={() => { setIsSearchOpen(!isSearchOpen); if(isSearchOpen) setSearchQuery(''); }}
+                className={`ml-2 p-1.5 rounded-lg transition-all border ${isSearchOpen ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-blue-600'}`}
+              >
+                <Search size={16} />
+              </button>
             </div>
             <Button variant="magic" onClick={handleTxAnalysis} disabled={isTxAnalyzing} className="text-xs px-4 py-2 h-9 w-full sm:w-auto">
               {isTxAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyser
             </Button>
           </div>
 
+          {/* Barre de recherche animée */}
+          {isSearchOpen && (
+            <div className="mb-4 animate-in slide-in-from-top duration-200">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Rechercher une opération..."
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+
           {/* Zone de liste défilante */}
-          <div className="flex-1 overflow-y-auto no-scrollbar pr-1">
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
             <div className="space-y-2">
-              {(!filteredTransactions || filteredTransactions.length === 0) ? (
+              {(!displayTransactions || displayTransactions.length === 0) ? (
                 <div className="p-10 text-center text-slate-400 italic text-sm">Aucune opération trouvée</div>
               ) : (
-                filteredTransactions.map(t => (
-                  <div 
-                    key={t.id} 
-                    className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200 group cursor-pointer"
-                    onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`p-2 rounded-full shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        {t.type === 'income' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      </div>
-                      <div className="truncate">
-                        <p className="font-bold text-slate-800 text-sm truncate">{t.label}</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
-                          {/* Ajout du tag Prév. pour les transactions futures */}
-                          {new Date(t.date) > new Date() && (
-                            <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
-                          )}
+                <>
+                  {displayTransactions.map(t => (
+                    <div 
+                      key={t.id} 
+                      className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200 group cursor-pointer"
+                      onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-2 rounded-full shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                          {t.type === 'income' ? <ArrowUpRight size={14} /> : t.type === 'transfer' ? <ArrowRight size={14} /> : <ArrowDownRight size={14} />}
+                        </div>
+                        <div className="min-w-0 truncate">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="font-bold text-slate-800 text-sm truncate">{t.label}</p>
+                            {(() => {
+                              const asset = assets?.find(a => a.id.toString() === (t.linkedAssetId || t.fromId || t.toId)?.toString());
+                              if (asset) {
+                                return (
+                                  <span className="flex items-center gap-1 text-[8px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight shrink-0">
+                                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS[asset.type] || '#cbd5e1' }} />
+                                    {asset.name}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <div title="Vous n'avez pas défini de compte pour cette opération." className="flex items-center gap-1 text-red-500 cursor-help shrink-0">
+                                  <AlertCircle size={14} />
+                                  <span className="text-[9px] font-bold uppercase md:hidden">Aucun compte</span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                            {new Date(t.date) > new Date() && (
+                              <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      <div className="text-right shrink-0">
+                        <p className={`font-bold text-sm ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
+                          {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
+                        </p>
+                        {t.category && <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">{t.category}</p>}
+                      </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-bold text-sm ${t.type === 'income' ? 'text-green-600' : 'text-slate-800'}`}>
-                        {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
-                      </p>
-                      {t.category && <p className="text-[9px] text-slate-400 uppercase font-bold">{t.category}</p>}
+                  ))}
+
+                  {/* Bouton Charger plus - Apparaît si il reste des transactions cachées */}
+                  {allFilteredTransactions.length > visibleCount && (
+                    <div className="py-4 flex justify-center">
+                      <Button 
+                        variant="secondary" 
+                        onClick={() => setVisibleCount(prev => prev + 20)}
+                        className="text-xs font-bold w-full sm:w-auto border-slate-200"
+                      >
+                        Charger plus d'opérations
+                      </Button>
                     </div>
-                  </div>
-                ))
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1961,16 +2049,28 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
   }
 
-  // À ajouter au début de BudgetView
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterCategory, setFilterCategory] = useState(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(20);
 
-  const filteredTransactions = useMemo(() => {
+  const allFilteredTransactions = useMemo(() => {
     let result = [...(transactions || [])];
     if (filterMonth) result = result.filter(t => t.date.startsWith(filterMonth));
     if (filterCategory) result = result.filter(t => t.category === filterCategory);
+    if (searchQuery) {
+      result = result.filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    result.sort((a, b) => b.date.localeCompare(a.date));
     return result;
-  }, [transactions, filterMonth, filterCategory]);
+  }, [transactions, filterMonth, filterCategory, searchQuery]);
+
+  const displayTransactions = useMemo(() => {
+    return allFilteredTransactions.slice(0, visibleCount);
+  }, [allFilteredTransactions, visibleCount]);
+
+  useEffect(() => { setVisibleCount(20); }, [filterMonth, filterCategory, searchQuery]);
 
   const [newTrans, setNewTrans] = useState({ date: new Date().toISOString().split('T')[0], label: '', amount: '', type: 'expense', category: 'Autre' });
   const [selectedAccount, setSelectedAccount] = useState('');
@@ -2076,7 +2176,18 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   `;
     try {
       const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
-      const data = JSON.parse(resultText.replace(/```json/g, '').replace(/```/g, '').trim());
+      
+      // Sécurité renforcée : on cherche si le texte contient bien une structure JSON { ... }
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      
+      if (!jsonMatch) {
+        alert("L'assistant n'a pas pu créer la transaction. Message : " + resultText);
+        setIsAiProcessing(false);
+        return;
+      }
+
+      // On parse uniquement la partie JSON trouvée
+      const data = JSON.parse(jsonMatch[0]);
       setNewTrans({ 
         date: data.date || new Date().toISOString().split('T')[0], 
         label: data.label || '', 
@@ -2168,59 +2279,113 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
 
         <Card className="flex flex-col relative border-slate-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 shrink-0">
-          <div className="flex items-center gap-2">
-            <List size={20} className="text-blue-600 shrink-0"/> 
-            <span className="leading-tight text-lg font-bold text-slate-800">Dernières Opérations</span>
-            
-            {/* Badge de filtre dynamique */}
-            {(filterMonth || filterCategory) && (
-              <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-100 animate-in fade-in">
-                Filtré
-              </span>
-            )}
+            <div className="flex items-center gap-2 flex-1">
+              <List size={20} className="text-blue-600 shrink-0"/> 
+              <span className="leading-tight text-lg font-bold text-slate-800">Dernières Opérations</span>
+              {(filterMonth || filterCategory || searchQuery) && (
+                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md border border-indigo-100">
+                  Filtré
+                </span>
+              )}
+              {/* Bouton Loupe */}
+              <button 
+                onClick={() => { setIsSearchOpen(!isSearchOpen); if(isSearchOpen) setSearchQuery(''); }}
+                className={`ml-2 p-1.5 rounded-lg transition-all border ${isSearchOpen ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-blue-600'}`}
+              >
+                <Search size={16} />
+              </button>
+            </div>
           </div>
-          
-          
-        </div>
-          <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100">
-            {filteredTransactions.length === 0 ? (
+
+          {/* Zone de recherche conditionnelle */}
+          {isSearchOpen && (
+            <div className="mb-6 animate-in slide-in-from-top duration-200 px-1">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Rechercher par nom..."
+                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+          <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100 custom-scrollbar pr-2">
+            {displayTransactions.length === 0 ? (
               <div className="p-10 text-center text-slate-400 italic">
                 Aucune transaction pour les filtres sélectionnés.
               </div>
             ) : (
-              filteredTransactions.map(t => (
-                <div 
-                  key={t.id} 
-                  className={`p-4 flex items-center justify-between hover:bg-white transition group border-b border-slate-50 last:border-0 group cursor-pointer ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
-                  onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden min-w-0">
-                    <div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
-                      {t.type === 'income' ? <ArrowUpRight size={16} /> : t.type === 'transfer' ? <ArrowRight size={16} /> : <ArrowDownRight size={16} />}
-                    </div>
-                    <div className="min-w-0 truncate">
-                      <p className="font-medium text-slate-800 truncate">{t.label}</p>
+              <>
+                {displayTransactions.map(t => (
+                  <div 
+                    key={t.id} 
+                    className={`p-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
+                    onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                      <div className={`p-2 rounded-full flex-shrink-0 ${t.type === 'income' ? 'bg-green-100 text-green-600' : t.type === 'transfer' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                        {t.type === 'income' ? <ArrowUpRight size={14} /> : t.type === 'transfer' ? <ArrowRight size={14} /> : <ArrowDownRight size={14} />}
+                      </div>
+                      <div className="min-w-0 truncate">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <p className="font-bold text-slate-800 text-sm truncate">{t.label}</p>
+                        {(() => {
+                          const asset = assets?.find(a => a.id.toString() === (t.linkedAssetId || t.fromId || t.toId)?.toString());
+                          if (asset) {
+                            return (
+                              <span className="flex items-center gap-1 text-[8px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-tight shrink-0">
+                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS[asset.type] || '#cbd5e1' }} />
+                                {asset.name}
+                              </span>
+                            );
+                          }
+                          return (
+                            <div title="Vous n'avez pas défini de compte pour cette opération" className="flex items-center gap-1 text-red-500 cursor-help shrink-0" >
+                              <AlertCircle size={14} />
+                              <span className="text-[9px] font-bold uppercase md:hidden">Aucun compte</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <div className="flex gap-2 items-center">
-                        <p className="text-xs text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
-                        {/* Ajout du tag Prév. */}
+                        <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
                         {new Date(t.date) > new Date() && (
                           <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>
                         )}
-                        {t.type === 'expense' && <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{t.category || 'Autre'}</span>}
+                      </div>
+                    </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right flex flex-col items-end">
+                        <p className={`font-bold text-sm ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
+                          {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
+                        </p>
+                        {t.category && <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">{t.category}</p>}
+                      </div>
+                      <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+                        <button onClick={(e) => { e.stopPropagation(); startEdit(t); }} className="p-1 text-slate-400 hover:text-blue-600 transition-colors"><Edit size={16} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setTransactionToDelete(t.id); }} className="p-1 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={16} /></button>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className={`font-bold ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-slate-800'}`}>
-                      {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{formatCurrency(t.amount)}
-                    </span>
-                    <div className={`${focusedTxId === t.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
-                      <button onClick={(e) => { e.stopPropagation(); startEdit(t); }} className="p-1 text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); setTransactionToDelete(t.id); }} className="p-1 text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
-                    </div>
+                ))}
+
+                {allFilteredTransactions.length > visibleCount && (
+                  <div className="py-6 flex justify-center">
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => setVisibleCount(prev => prev + 20)}
+                      className="text-xs font-bold w-full border-slate-200"
+                    >
+                      Charger plus d'opérations
+                    </Button>
                   </div>
-                </div>
-              ))
+                )}
+              </>
             )}
           </div>
         </Card>
