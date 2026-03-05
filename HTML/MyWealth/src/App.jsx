@@ -215,20 +215,26 @@ const processFlowData = (timeRange, transactions) => {
 };
 
 // --- API HELPER ---
-async function callGeminiAPI(systemPrompt, userPrompt) {
+async function callGeminiAPI(systemPrompt, userPrompt, imageBase64 = null) {
   try {
+    const parts = [{ text: `INSTRUCTIONS :\n${systemPrompt}\n\nREQUÊTE :\n${userPrompt}` }];
+    
+    // Ajout de l'image si elle existe (format attendu : data:image/jpeg;base64,...)
+    if (imageBase64) {
+      parts.push({
+        inline_data: {
+          mime_type: imageBase64.split(';')[0].split(':')[1],
+          data: imageBase64.split(',')[1]
+        }
+      });
+    }
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Fail-Safe : Fusion des instructions système et utilisateur pour éviter l'erreur "system_instruction"
-          contents: [{ 
-            role: "user", 
-            parts: [{ text: `INSTRUCTIONS :\n${systemPrompt}\n\nREQUÊTE :\n${userPrompt}` }] 
-          }]
-        })
+        body: JSON.stringify({ contents: [{ role: "user", parts }] })
       }
     );
     if (!response.ok) {
@@ -388,23 +394,39 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
                 
                 <div className="mb-4">
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Objectif Principal</label>
-                    <select name="financialGoal" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white" value={formData.financialGoal} onChange={handleChange}>
-                        <option value="freedom">Liberté Financière / FIRE</option>
-                        <option value="retirement">Préparer sa retraite</option>
-                        <option value="real_estate">Achat Immobilier</option>
-                        <option value="safety">Épargne de précaution</option>
-                        <option value="growth">Croissance du capital</option>
-                        <option value="other">Autre</option>
-                    </select>
+                    <div className="space-y-1">
+                      <select name="financialGoal" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white font-medium" value={formData.financialGoal} onChange={handleChange}>
+                          <option value="freedom">Indépendance Financière </option>
+                          <option value="retirement">Préparer ma Retraite </option>
+                          <option value="real_estate">Projet Immobilier </option>
+                          <option value="safety">Sécurité </option>
+                          <option value="growth">Maximiser mon Capital </option>
+                          <option value="other">Autre</option>
+                      </select>
+                      <p className="text-[10px] text-slate-500 italic px-1">
+                        {formData.financialGoal === 'freedom' && "L'IA priorisera la génération de revenus passifs."}
+                        {formData.financialGoal === 'retirement' && "L'IA favorisera une projection sur le long terme."}
+                        {formData.financialGoal === 'real_estate' && "L'IA surveillera votre apport et la liquidité de vos fonds."}
+                        {formData.financialGoal === 'safety' && "L'IA vous alertera si votre épargne de secours est trop faible."}
+                        {formData.financialGoal === 'growth' && "L'IA vous aidera à faire fructifier vos actifs."}
+                      </p>
+                    </div>
                 </div>
 
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Profil de Risque</label>
-                    <select name="riskProfile" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white" value={formData.riskProfile} onChange={handleChange}>
-                        <option value="prudent">Prudent (Sécurité avant tout)</option>
-                        <option value="balanced">Équilibré (Risque modéré)</option>
-                        <option value="dynamic">Dynamique (Performance max)</option>
-                    </select>
+                    <div className="space-y-1">
+                      <select name="riskProfile" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white font-medium" value={formData.riskProfile} onChange={handleChange}>
+                          <option value="prudent">Prudent </option>
+                          <option value="balanced">Équilibré </option>
+                          <option value="dynamic">Dynamique </option>
+                      </select>
+                      <p className="text-[10px] text-slate-500 italic px-1">
+                        {formData.riskProfile === 'prudent' && "Priorité à la sécurité. Perte tolérée : 0% à -2%."}
+                        {formData.riskProfile === 'balanced' && "Mix entre livrets et bourse. Perte tolérée : -5% à -10%."}
+                        {formData.riskProfile === 'dynamic' && "Majorité en actions/crypto. Perte tolérée : -20% ou plus."}
+                      </p>
+                    </div>
                 </div>
             </div>
 
@@ -2153,26 +2175,29 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     - Date d'aujourd'hui : ${new Date().toLocaleDateString('fr-FR')}.
     - Analyse l'entrée utilisateur suivante : "${aiInput}"
 
-    GUIDE DE CLASSIFICATION (Utilise ces exemples pour choisir la catégorie) :
-    - Alimentation : Supermarchés (Lidl, Leclerc), restaurants, boulangerie, UberEats.
-    - Logement : Loyer, charges, électricité, bricolage (Leroy Merlin, Castorama).
-    - Transport : Essence, parking, péage, train (SNCF), Uber, bus.
-    - Loisirs : Cinéma, abonnement jeux vidéo, sorties, Netflix, Spotify.
-    - Santé : Pharmacie, médecin, dentiste, mutuelle.
-    - Shopping : Vêtements, Amazon, High-tech, décoration.
-    - Services : Facture téléphone, internet, assurance, banque.
-    - Autre : Si rien ne correspond.
+    RÈGLES CRITIQUES DE NETTOYAGE :
+    1. CALCUL DU MONTANT : Si l'utilisateur donne un calcul (ex: 5+8), effectue TOUJOURS l'opération et renvoie le résultat final (ex: 13) dans "amount".
+    2. LIBELLÉ PROPRE : Tu dois impérativement RETIRER du "label" les montants, les devises (€, euros) et les opérations mathématiques (ex: retire "5+8" ou "13e" du nom). Le champ "label" doit contenir le nom du marchand ou la description ce qui correspond à TOUT CE QUI N'EST PAS considéré comme un montant, une devise ou une opération mathématique. Mets la première lettre du libellé en majuscule même si l'utilisateur renseigne tout en minuscule.
+
+    GUIDE DE CLASSIFICATION :
+    - Alimentation : Supermarchés, restaurants, UberEats.
+    - Logement : Loyer, charges, électricité, Leroy Merlin.
+    - Transport : Essence, SNCF, Uber, parking.
+    - Loisirs : Cinéma, Netflix, Spotify, sorties.
+    - Santé : Pharmacie, médecin.
+    - Shopping : Amazon, vêtements, high-tech.
+    - Services : Téléphone, assurance, frais bancaires.
 
     INSTRUCTIONS DE SORTIE (JSON UNIQUEMENT) :
-    - Extrais le "label" (le nom du marchand ou la description de l'achat).
-    - Extrais la date au format YYYY-MM-DD (interprète "hier", "lundi dernier", etc.).
-    - Extrais le montant (nombre pur).
-    - Détermine le type : 'expense' (dépense, achat), 'income' (revenu, remboursement, salaire) ou 'transfer' (virement).
-    - Pour la catégorie, sois précis en te basant sur le marchand.
-    - Si type='transfer', extrais 'accountFrom' et 'accountTo' depuis la liste des comptes.
-    - Si type='expense' ou 'income', extrais 'accountName' (le compte impacté).
+    - "label" : Nom nettoyé (sans prix/calcul).
+    - "date" : YYYY-MM-DD.
+    - "amount" : Résultat mathématique final (nombre pur).
+    - "type" : 'expense', 'income' ou 'transfer'.
+    - "category" : Selon le guide ci-dessus.
+    - Si type='transfer' : extrais "accountFrom" et "accountTo".
+    - Si type='expense' ou 'income' : extrais "accountName".
 
-    Réponds uniquement avec le JSON sans texte avant ou après.
+    Réponds uniquement avec le JSON.
   `;
     try {
       const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
@@ -2394,48 +2419,90 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   );
 };
 
-const AiAdvisorView = ({ assets, transactions, userProfile }) => {
+const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessages }) => {
   if (assets === null || transactions === null) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
   
-  const [messages, setMessages] = useState([{ role: 'assistant', content: "Bonjour ! Je suis votre conseiller financier intelligent. Comment puis-je vous aider aujourd'hui ?" }]);
   const [input, setInput] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setSelectedImage(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSend = async (customPrompt = null, label = null) => {
     const userMessage = customPrompt || input;
-    if (!userMessage.trim()) return;
+    if (!userMessage.trim() && !selectedImage) return;
 
-    // Si c'est un bouton, on affiche un label plus joli dans le chat
     const displayMessage = label || userMessage;
-    const newMessages = [...messages, { role: 'user', content: displayMessage }];
+    const newMessages = [...messages, { role: 'user', content: displayMessage, image: selectedImage }];
     
     setMessages(newMessages); 
     setInput(''); 
+    const currentImage = selectedImage;
+    setSelectedImage(null);
     setIsLoading(true);
 
-    // On injecte le profil de risque et les objectifs dans le contexte
-    const risk = userProfile?.riskProfile || 'balanced';
-    const goal = userProfile?.financialGoal || 'growth';
+    // SYNTHÈSE PATRIMONIALE DÉTAILLÉE (Connaissance des supports)
+    const totalPatrimoine = assets.reduce((acc, item) => acc + item.value, 0);
+    const age = userProfile?.birthDate ? (new Date().getFullYear() - new Date(userProfile.birthDate).getFullYear()) : 'Non précisé';
+    const revenuMensuel = userProfile?.monthlyIncome ? formatCurrency(Number(userProfile.monthlyIncome)) : 'Non précisé';
+    
+    const detailActifs = assets.map(a => {
+      let line = `- ${a.name}: ${formatCurrency(a.value)} (${CATEGORY_LABELS[a.type]})`;
+      // Si le compte a des positions (supports), on les ajoute au contexte
+      if (a.positions && a.positions.length > 0) {
+        const posDetail = a.positions
+          .filter(p => p.value > 0) // On ignore les lignes vides pour économiser des tokens
+          .map(p => `  └─ ${p.name}: ${formatCurrency(p.value)}`)
+          .join('\n');
+        if (posDetail) line += `\n${posDetail}`;
+      }
+      return line;
+    }).join('\n');
+
+    const fluxRecents = transactions.slice(0, 15).map(t => `- ${t.date}: ${t.label} (${t.amount}€)`).join('\n');
 
     const systemPrompt = `
-      Tu es un conseiller financier expert. 
-      Profil utilisateur : Risque ${risk}, Objectif : ${goal}.
-      Patrimoine : ${JSON.stringify(assets)}. 
-      Dernières transactions : ${JSON.stringify(transactions.slice(0, 10))}.
+      Tu es l'Expert en Stratégie Patrimoniale de MyWealth.io. Réponds de façon DIRECTE, CONCISE et CIBLÉE.
       
-      CONSIGNE : Réponds de manière concise (max 15 lignes). 
-      INTERDICTION : N'utilise JAMAIS de Markdown (*, **, #).
-      FORMAT : Utilise des retours à la ligne simples et des listes avec des tirets (-).
+      CONSIGNE CRITIQUE : Réponds uniquement à la question posée. Ne fais PAS de résumé global du patrimoine (Livret A, profil de risque, etc.) si la question porte sur un sujet précis comme un PEE. Va droit au but.
+
+      CONTEXTE TECHNIQUE :
+      - Profil Utilisateur : ${userProfile?.firstName}, ${age} ans.
+      - Revenu Mensuel : ${revenuMensuel}.
+      - Risque : ${userProfile?.riskProfile || 'Equilibré'} (Objectif: ${userProfile?.financialGoal || 'Indépendance'})
+      - Actifs & Supports détaillés : 
+      ${detailActifs}
+      - Flux récents : ${fluxRecents}
+
+      RÈGLES D'OR :
+      1. RÉPONSE CIBLÉE : Si l'utilisateur pose une question sur un support spécifique, n'analyse QUE ce support.
+      2. PAS DE BLABLA MAIS AGREABLE : Si la réponse tient en deux phrases, n'en fais pas dix. Supprime les introductions polies inutiles. Cependant si la réponse est négative, pose une question ouverte après afin de creuser le sujet. Fait aussi en sorte que la réponse ai l'aire joviale et agréable.
+      3. ANALYSE IMAGE : Si une image est jointe, compare ses données uniquement avec les actifs concernés par la question.
+
+      FORMATTAGE :
+      - ## pour les titres.
+      - - pour les listes.
+      - <b>texte</b> pour mettre en gras les chiffres clés.
+      - JAMAIS de symboles * ou # standards.
+      - Possibilité de mettre quelques emojis pour mettre en valeur les réponses ou la rendre plus aggréable, mais n'en abuses pas.
     `;
 
     try {
-        const aiResponse = await callGeminiAPI(systemPrompt, userMessage);
+        const aiResponse = await callGeminiAPI(systemPrompt, userMessage, currentImage);
         setMessages([...newMessages, { role: 'assistant', content: aiResponse }]);
     } catch (e) { 
-        setMessages([...newMessages, { role: 'assistant', content: "Désolé, je rencontre une difficulté technique. Réessayez dans une minute." }]); 
+        setMessages([...newMessages, { role: 'assistant', content: "Erreur technique. Vérifiez votre connexion." }]); 
     }
     setIsLoading(false);
   };
@@ -2507,16 +2574,43 @@ const AiAdvisorView = ({ assets, transactions, userProfile }) => {
         </div>
 
         <div className="p-4 bg-white border-t border-slate-100">
+          {selectedImage && (
+            <div className="mb-2 relative inline-block">
+              {selectedImage.startsWith('data:application/pdf') ? (
+                <div className="h-20 w-20 flex flex-col items-center justify-center bg-blue-50 border border-blue-200 rounded-lg text-blue-600">
+                  <Cloud size={24} />
+                  <span className="text-[10px] font-bold mt-1">PDF</span>
+                </div>
+              ) : (
+                <img src={selectedImage} alt="Preview" className="h-20 w-20 object-cover rounded-lg border border-slate-200" />
+              )}
+              <button onClick={() => setSelectedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm"><X size={12}/></button>
+            </div>
+          )}
           <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+            <input 
+              type="file" 
+              accept="image/*,application/pdf" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleImageChange} 
+            />
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current.click()}
+              className="p-3 text-slate-500 hover:text-indigo-600 bg-slate-50 rounded-xl border border-slate-200 transition-all"
+            >
+              <Cloud size={20} />
+            </button>
             <input 
               type="text" 
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
-              placeholder="Posez une question sur vos finances..."
+              placeholder="Posez une question ou partagez une capture..."
               className="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               disabled={isLoading} 
             />
-            <Button variant="magic" disabled={isLoading || !input.trim()} type="submit">
+            <Button variant="magic" disabled={isLoading || (!input.trim() && !selectedImage)} type="submit">
               <Send size={18} />
             </Button>
           </form>
@@ -2724,6 +2818,19 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // État persistant du chat
+  const [chatMessages, setChatMessages] = useState(() => {
+    const saved = localStorage.getItem(`myWealth_chat_${user?.uid}`);
+    return saved ? JSON.parse(saved) : [{ role: 'assistant', content: "Bonjour ! Je suis votre conseiller MyWealth. \nJe connais votre patrimoine et je peux analyser vos documents. Comment puis-je vous aider ?" }];
+  });
+
+  // Sauvegarde automatique quand les messages changent
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(`myWealth_chat_${user.uid}`, JSON.stringify(chatMessages));
+    }
+  }, [chatMessages, user]);
   const [assets, setAssets] = useState(null);
   const [transactions, setTransactions] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -3263,6 +3370,38 @@ const showToast = (msg) => setToast({ message: msg });
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 md:pb-0">
+      <style>{`
+        /* Barre de défilement personnalisée pour toute l'app */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1; /* slate-300 */
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8; /* slate-400 */
+        }
+
+        /* Masquer la barre de défilement pour les éléments épurés */
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+
+        /* Amélioration du défilement global */
+        * {
+          scrollbar-color: #cbd5e1 transparent;
+          scrollbar-width: thin;
+        }
+      `}</style>
       <InactivityModal isOpen={showAutoLogoutModal} onStayConnected={confirmPresence} />
 
       <ProfileModal
@@ -3345,7 +3484,15 @@ const showToast = (msg) => setToast({ message: msg });
             onUpdateTransaction={handleUpdateTransaction}
           />
         )}
-        {activeTab === 'advisor' && <AiAdvisorView assets={assets} transactions={transactions} userProfile={userProfile} />}
+        {activeTab === 'advisor' && (
+          <AiAdvisorView 
+            assets={assets} 
+            transactions={transactions} 
+            userProfile={userProfile} 
+            messages={chatMessages} 
+            setMessages={setChatMessages} 
+          />
+        )}
       </main>
 
       {/* BOTTOM NAVIGATION (MOBILE) */}
