@@ -99,6 +99,18 @@ const CATEGORY_LABELS = {
   autre: 'Autres (Montres, Or...)'
 };
 
+// --- OPTIONS D'ICÔNES POUR LES COMPTES ---
+const ASSET_ICON_OPTIONS = {
+  building: { icon: Building, label: 'Banque' },
+  wallet: { icon: Wallet, label: 'Portefeuille' },
+  piggy: { icon: PiggyBank, label: 'Épargne' },
+  trending: { icon: TrendingUp, label: 'Bourse' },
+  shield: { icon: ShieldCheck, label: 'Assurance' },
+  home: { icon: Home, label: 'Immo' },
+  zap: { icon: Zap, label: 'Crypto' },
+  briefcase: { icon: Briefcase, label: 'Pro' }
+};
+
 const INITIAL_ASSETS = [];
 const INITIAL_TRANSACTIONS = [];
 
@@ -358,8 +370,8 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onMouseDown={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto relative" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Mon Profil</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full"><X size={20}/></button>
@@ -837,6 +849,70 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   const [movementConfig, setMovementConfig] = useState(null); 
   const [movementData, setMovementData] = useState({ positionId: '', amount: '' });
 
+  // Nouveaux états pour l'édition de l'en-tête (Nom, Icône, Banque, Type)
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(asset.name);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [isEditingInstitution, setIsEditingInstitution] = useState(false);
+  const [editedInstitution, setEditedInstitution] = useState(asset.institution || '');
+  const [isEditingType, setIsEditingType] = useState(false);
+
+  // Met à jour les états édités si l'actif change
+  useEffect(() => { 
+    setEditedName(asset.name); 
+    setEditedInstitution(asset.institution || '');
+  }, [asset.name, asset.institution]);
+
+  // Fermeture du détail de l'actif avec la touche "Échap"
+  useEffect(() => {
+    const handleEsc = (e) => {
+      // On ferme uniquement si on n'est pas en train d'éditer un champ de l'en-tête
+      if (e.key === 'Escape' && !isEditingName && !isEditingInstitution && !isEditingType && !showIconPicker) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose, isEditingName, isEditingInstitution, isEditingType, showIconPicker]);
+
+  const handleSaveName = () => {
+     setIsEditingName(false);
+     if (editedName.trim() && editedName !== asset.name) {
+         onUpdate({ ...asset, name: editedName.trim() });
+     } else {
+         setEditedName(asset.name); // Annule si vide
+     }
+  };
+
+  const handleSaveInstitution = () => {
+     setIsEditingInstitution(false);
+     if (editedInstitution.trim() !== asset.institution) {
+         onUpdate({ ...asset, institution: editedInstitution.trim() });
+     } else {
+         setEditedInstitution(asset.institution || '');
+     }
+  };
+
+  const handleKeyDownName = (e) => {
+     if (e.key === 'Enter') handleSaveName();
+     if (e.key === 'Escape') { setIsEditingName(false); setEditedName(asset.name); }
+  };
+
+  const handleKeyDownInstitution = (e) => {
+     if (e.key === 'Enter') handleSaveInstitution();
+     if (e.key === 'Escape') { setIsEditingInstitution(false); setEditedInstitution(asset.institution || ''); }
+  };
+
+  const handleIconChange = (iconKey) => {
+     onUpdate({ ...asset, icon: iconKey });
+     setShowIconPicker(false);
+  };
+  
+  const handleTypeChange = (newType) => {
+     onUpdate({ ...asset, type: newType });
+     setIsEditingType(false);
+  };
+
   const handleExecuteMovement = (e) => {
     e.preventDefault();
     const amount = parseFloat(movementData.amount);
@@ -1099,10 +1175,113 @@ return (
               <button onClick={onClose} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium">
                 <ChevronLeft size={16} /> Retour
               </button>
-              <h2 className="text-xl md:text-2xl font-bold text-slate-800 flex items-center gap-2">
-                <Building size={20} className="text-blue-600"/>{asset.name}
-              </h2>
-              <p className="text-slate-500 text-xs md:text-sm">{asset.institution} • {CATEGORY_LABELS[asset.type]}</p>
+              
+              <div className="flex items-center gap-3 relative z-50">
+                {/* SELECTEUR D'ICÔNE */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowIconPicker(!showIconPicker)} 
+                    className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors flex items-center justify-center text-blue-600 cursor-pointer"
+                    title="Changer l'icône"
+                  >
+                    {(() => {
+                      const IconComp = (ASSET_ICON_OPTIONS[asset.icon] || ASSET_ICON_OPTIONS['building']).icon;
+                      return <IconComp size={24} />;
+                    })()}
+                  </button>
+                  {showIconPicker && (
+                    <>
+                      {/* Overlay invisible pour fermer le menu en cliquant à côté */}
+                      <div className="fixed inset-0 z-40" onClick={() => setShowIconPicker(false)}></div>
+                      <div className="absolute top-full left-0 mt-2 p-2 bg-white rounded-xl shadow-xl border border-slate-200 grid grid-cols-4 gap-2 z-50 w-64">
+                        {Object.keys(ASSET_ICON_OPTIONS).map(key => {
+                          const OptionIcon = ASSET_ICON_OPTIONS[key].icon;
+                          return (
+                            <button 
+                              key={key} 
+                              onClick={() => handleIconChange(key)}
+                              className={`flex flex-col items-center p-2 rounded-lg hover:bg-blue-50 transition-colors ${asset.icon === key ? 'bg-blue-100 text-blue-700' : 'text-slate-600'}`}
+                            >
+                              <OptionIcon size={20} className="mb-1" />
+                              <span className="text-[9px] font-medium">{ASSET_ICON_OPTIONS[key].label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* CHAMP NOM EDITABLE */}
+                {isEditingName ? (
+                  <input 
+                    type="text" 
+                    value={editedName} 
+                    onChange={(e) => setEditedName(e.target.value)}
+                    onBlur={handleSaveName}
+                    onKeyDown={handleKeyDownName}
+                    autoFocus
+                    className="text-xl md:text-2xl font-bold text-slate-800 bg-white border-b-2 border-blue-500 outline-none w-full max-w-[250px] px-1 bg-transparent"
+                  />
+                ) : (
+                  <h2 
+                    onClick={() => setIsEditingName(true)}
+                    className="text-xl md:text-2xl font-bold text-slate-800 hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
+                    title="Modifier le nom"
+                  >
+                    {asset.name}
+                  </h2>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 mt-2 text-slate-500 text-xs md:text-sm">
+                {/* INSTITUTION EDITABLE */}
+                {isEditingInstitution ? (
+                  <input
+                    type="text"
+                    value={editedInstitution}
+                    onChange={(e) => setEditedInstitution(e.target.value)}
+                    onBlur={handleSaveInstitution}
+                    onKeyDown={handleKeyDownInstitution}
+                    autoFocus
+                    placeholder="Banque..."
+                    className="bg-transparent border-b-2 border-blue-500 outline-none w-24 md:w-32 text-slate-800 px-1 font-medium"
+                  />
+                ) : (
+                  <span
+                    onClick={() => setIsEditingInstitution(true)}
+                    className="hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed truncate max-w-[120px]"
+                    title="Modifier la banque"
+                  >
+                    {asset.institution || 'Sans banque'}
+                  </span>
+                )}
+                
+                <span>•</span>
+
+                {/* TYPE EDITABLE */}
+                {isEditingType ? (
+                  <select
+                    value={asset.type}
+                    onChange={(e) => handleTypeChange(e.target.value)}
+                    onBlur={() => setIsEditingType(false)}
+                    autoFocus
+                    className="bg-white border border-slate-300 rounded text-slate-800 outline-none p-0.5 text-xs font-medium"
+                  >
+                    {Object.keys(CATEGORY_LABELS).map(key => (
+                      <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span
+                    onClick={() => setIsEditingType(true)}
+                    className="hover:text-blue-600 cursor-pointer transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
+                    title="Modifier le type"
+                  >
+                    {CATEGORY_LABELS[asset.type]}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="text-right">
               <p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p>
@@ -2043,10 +2222,10 @@ const AssetsView = ({ assets, setAssets }) => {
     <div className="space-y-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={() => { handleDelete(assetToDelete); setAssetToDelete(null); }} message="Supprimer ce compte ?" />
       {selectedAsset && (<AssetDetailOverlay key={selectedAsset.id} asset={selectedAsset} onClose={() => setSelectedAsset(null)} onUpdate={handleUpdateAsset} />)}
-      {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant="primary"><PlusCircle size={20} /> Ajouter</Button></div>)}
+      {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant={isFormOpen ? "secondary" : "primary"} className="transition-all duration-300 min-w-[120px]">{isFormOpen ? <><X size={20} /> Annuler</> : <><PlusCircle size={20} /> Ajouter</>}</Button></div>)}
       {isFormOpen && (
-        <Card className="bg-blue-50 border-blue-100">
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
+        <Card className="bg-blue-50 border-blue-100 animate-in slide-in-from-top-4 fade-in duration-300 origin-top">
+          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" autoFocus className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
         </Card>
       )}
       <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{formatCurrency(groupedAssets[type].reduce((sum, a) => sum + a.value, 0))}</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
@@ -2055,7 +2234,19 @@ const AssetsView = ({ assets, setAssets }) => {
           className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
           onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
         >
-          <div className="flex items-center gap-4 overflow-hidden min-w-0"><div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0"><Building size={20} /></div><div className="min-w-0 truncate"><p className="font-semibold text-slate-800 truncate">{asset.name}</p><p className="text-sm text-slate-500 truncate">{asset.institution}</p></div></div><div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{formatCurrency(asset.value)}</span>
+          <div className="flex items-center gap-4 overflow-hidden min-w-0">
+            <div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0">
+              {(() => {
+                const IconComponent = (ASSET_ICON_OPTIONS[asset.icon] || ASSET_ICON_OPTIONS['building']).icon;
+                return <IconComponent size={20} />;
+              })()}
+            </div>
+            <div className="min-w-0 truncate">
+              <p className="font-semibold text-slate-800 truncate">{asset.name}</p>
+              <p className="text-sm text-slate-500 truncate">{asset.institution}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{formatCurrency(asset.value)}</span>
           {/* Modif ici: utilisation de focusedAssetId pour mobile et group-hover pour desktop */}
           <div className={`${focusedAssetId === asset.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
             <button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
@@ -2330,11 +2521,16 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                 <input 
                   type="text"
                   placeholder="Rechercher par nom..."
-                  className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  className="w-full pl-9 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
                 />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-full p-0.5 transition-colors">
+                    <X size={12} />
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -2508,44 +2704,44 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-140px)] animate-in fade-in pb-20 md:pb-0">
-      {/* Sidebar - Actions Rapides */}
-      <div className="lg:col-span-1 space-y-4 overflow-y-auto no-scrollbar">
-        <Card className="bg-indigo-50 border-indigo-100 p-4">
-          <div className="flex items-center gap-2 mb-4 text-indigo-800 font-bold">
-            <Sparkles size={18} />
-            <span>Analyses Flash</span>
+    <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 h-[calc(100vh-140px)] md:h-[calc(100vh-140px)] animate-in fade-in pb-20 md:pb-0">
+      {/* Sidebar - Actions Rapides (Scroll horizontal sur mobile) */}
+      <div className="w-full lg:w-1/4 flex-shrink-0 flex flex-col gap-4">
+        <div className="bg-indigo-50 border border-indigo-100 p-3 md:p-4 rounded-xl shadow-sm">
+          <div className="flex items-center gap-2 mb-2 md:mb-4 text-indigo-800 font-bold">
+            <Sparkles size={16} md:size={18} />
+            <span className="text-sm md:text-base">Analyses Flash</span>
           </div>
           
-          <div className="grid grid-cols-1 gap-2">
+          <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
             <button onClick={() => handleSend("Fais un bilan de santé global de mon patrimoine.", "📊 Bilan de santé global")} 
-                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+                    className="flex-shrink-0 lg:w-full text-left p-2.5 md:p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
               <Activity size={14} /> Bilan de santé
             </button>
 
             <button onClick={() => handleSend("Analyse mes dépenses récentes et identifie des économies possibles.", "💸 Analyse des dépenses")} 
-                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+                    className="flex-shrink-0 lg:w-full text-left p-2.5 md:p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
               <ArrowDownRight size={14} /> Analyse dépenses
             </button>
 
             <button onClick={() => handleSend("Calcule si mon épargne de précaution (liquidités) couvre au moins 4 mois de mes dépenses moyennes.", "🛡️ Sécurité & Précaution")} 
-                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+                    className="flex-shrink-0 lg:w-full text-left p-2.5 md:p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
               <ShieldCheck size={14} /> Épargne de précaution
             </button>
 
             <button onClick={() => handleSend("En fonction de mon profil de risque, suggère une meilleure répartition de mon patrimoine.", "📈 Optimiser l'allocation")} 
-                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+                    className="flex-shrink-0 lg:w-full text-left p-2.5 md:p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
               <Scale size={14} /> Arbitrage & Risque
             </button>
 
             <button onClick={() => handleSend("Estime ma capacité d'apport pour un projet immobilier sans vider mes comptes d'investissement.", "🏠 Projet Immobilier")} 
-                    className="w-full text-left p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
+                    className="flex-shrink-0 lg:w-full text-left p-2.5 md:p-3 rounded-xl bg-white text-xs font-semibold text-slate-700 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 flex items-center gap-2">
               <Home size={14} /> Capacité Immobilière
             </button>
           </div>
-        </Card>
+        </div>
 
-        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+        <div className="hidden lg:block p-4 bg-blue-50 rounded-xl border border-blue-100">
            <p className="text-[10px] text-blue-700 font-bold uppercase mb-1">Status API</p>
            <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -2555,7 +2751,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
       </div>
 
       {/* Zone de Chat */}
-      <div className="lg:col-span-3 flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
           <h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={20} className="text-indigo-600"/> Conseiller MyWealth</h3>
           <span className="text-[10px] bg-slate-200 px-2 py-1 rounded-full text-slate-600 font-bold">MODE EXPERT</span>
@@ -2819,6 +3015,11 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   
+  // Remonte en haut de la page automatiquement à chaque changement d'onglet
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
   // État persistant du chat
   const [chatMessages, setChatMessages] = useState(() => {
     const saved = localStorage.getItem(`myWealth_chat_${user?.uid}`);
