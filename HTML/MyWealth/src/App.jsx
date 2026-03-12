@@ -845,7 +845,7 @@ const handleBack = () => {
 
 // --- COMPOSANTS VUES & DETAILS ---
 
-const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
+const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
   const isComposite = ['investissement', 'crypto', 'immobilier', 'autre', 'epargne_salariale'].includes(asset.type);
   const [activeTab, setActiveTab] = useState(isComposite ? 'composition' : 'history'); 
   const [viewMode, setViewMode] = useState('asset'); 
@@ -868,12 +868,38 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   const [isEditingInstitution, setIsEditingInstitution] = useState(false);
   const [editedInstitution, setEditedInstitution] = useState(asset.institution || '');
   const [isEditingType, setIsEditingType] = useState(false);
+  
+  // États pour l'édition du nom de la position
+  const [isEditingPosName, setIsEditingPosName] = useState(false);
+  const [editedPosName, setEditedPosName] = useState('');
 
   // Met à jour les états édités si l'actif change
   useEffect(() => { 
     setEditedName(asset.name); 
     setEditedInstitution(asset.institution || '');
   }, [asset.name, asset.institution]);
+
+  useEffect(() => {
+    if (selectedPosition) setEditedPosName(selectedPosition.name);
+  }, [selectedPosition]);
+
+  const handleSavePosName = () => {
+    setIsEditingPosName(false);
+    if (editedPosName.trim() && editedPosName !== selectedPosition.name) {
+       const updatedPositions = asset.positions.map(p =>
+          p.id === selectedPosition.id ? { ...p, name: editedPosName.trim() } : p
+       );
+       onUpdate({ ...asset, positions: updatedPositions });
+       setSelectedPosition({ ...selectedPosition, name: editedPosName.trim() });
+    } else {
+       setEditedPosName(selectedPosition.name);
+    }
+  };
+
+  const handleKeyDownPosName = (e) => {
+    if (e.key === 'Enter') handleSavePosName();
+    if (e.key === 'Escape') { setIsEditingPosName(false); setEditedPosName(selectedPosition.name); }
+  };
 
   // Fermeture du détail de l'actif avec la touche "Échap"
   useEffect(() => {
@@ -934,10 +960,22 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     const movementType = movementConfig.type; // 'buy' ou 'sell'
 
     const updatedPositions = asset.positions.map(p => {
-      // 1. Mise à jour de la poche Cash
+      // 1. Mise à jour de la poche Cash (Valeur ET Historique)
       if (p.isCash) {
         const delta = movementType === 'buy' ? -amount : amount;
-        return { ...p, value: parseFloat((p.value + delta).toFixed(2)) };
+        const newValue = parseFloat((p.value + delta).toFixed(2));
+        
+        let updatedHistory = [...(p.history || [])];
+        const existingIdx = updatedHistory.findIndex(h => h.date === today);
+        
+        if (existingIdx >= 0) {
+          updatedHistory[existingIdx] = { ...updatedHistory[existingIdx], value: newValue };
+        } else {
+          updatedHistory.push({ date: today, value: newValue });
+        }
+        updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        return { ...p, value: newValue, history: updatedHistory };
       }
 
       // 2. Mise à jour du support et fusion dans son historique
@@ -946,24 +984,33 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
         const delta = movementType === 'buy' ? amount : -amount;
         const newValue = parseFloat((p.value + delta).toFixed(2));
         
-        // On met à jour ou on crée le point d'historique pour aujourd'hui
-        let updatedHistory = [...(p.history || [])];
-        const existingIdx = updatedHistory.findIndex(h => h.date === today);
-        
-        if (existingIdx >= 0) {
-          updatedHistory[existingIdx] = { 
-            ...updatedHistory[existingIdx], 
-            value: newValue,
-            movementTag: movementType // On ajoute le tag sur le point existant
-          };
+        // Nouveau calcul du PRU (Total Investi) pour éviter qu'il ne devienne négatif
+        let newInvested = currentInvested;
+        if (movementType === 'buy') {
+            newInvested += amount;
         } else {
-          updatedHistory.push({ date: today, value: newValue, movementTag: movementType });
+            // En cas de vente, on réduit le PRU proportionnellement (ex: si je vends 50% de ma ligne, le PRU baisse de 50%)
+            // Sécurité : on évite la division par zéro au cas où la ligne vaudrait 0€
+            const ratio = p.value > 0 ? (amount / p.value) : 1;
+            newInvested = currentInvested - (currentInvested * ratio);
+            if (newInvested < 0) newInvested = 0; // Sécurité anti-négatif
         }
+        
+        // On ajoute TOUJOURS le nouveau point d'historique (avec un timestamp caché pour le différencier)
+        let updatedHistory = [...(p.history || [])];
+        const timestampMs = Date.now();
+        updatedHistory.push({ 
+          id: timestampMs, // Permet de distinguer plusieurs actions le même jour
+          date: today, 
+          value: newValue, 
+          movementTag: movementType,
+          movementAmount: amount // On sauvegarde le montant de l'achat/vente
+        });
 
         return { 
           ...p, 
           value: newValue,
-          totalInvested: parseFloat((currentInvested + delta).toFixed(2)),
+          totalInvested: parseFloat(newInvested.toFixed(2)),
           history: updatedHistory
         };
       }
@@ -994,6 +1041,42 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
 
   const { totalInvested, plusValue, plusValuePct, cash } = metrics;
 
+  // --- NOUVEAU : Historique Unifié des Opérations ---
+  const unifiedHistory = useMemo(() => {
+    if (!isComposite) return [];
+    let events = [];
+    
+    // 1. Transactions externes (Virements entrants/sortants)
+    if (transactions) {
+      transactions.forEach(t => {
+        if (t.linkedAssetId === asset.id || t.fromId === asset.id || t.toId === asset.id) {
+          let type = 'in';
+          let amount = t.amount;
+          if (t.type === 'expense' || (t.type === 'transfer' && t.fromId === asset.id)) type = 'out';
+          events.push({ id: t.id, date: t.date, type, label: t.label || 'Virement', amount, isExternal: true });
+        }
+      });
+    }
+
+    // 2. Mouvements internes (Achat/Vente sur les supports)
+    if (asset.positions) {
+      asset.positions.filter(p => !p.isCash).forEach(pos => {
+        (pos.history || []).forEach(h => {
+          if (h.movementTag === 'buy' || h.movementTag === 'sell') {
+            events.push({ id: h.id, date: h.date, type: h.movementTag, label: pos.name, amount: h.movementAmount || 0, isExternal: false });
+          }
+        });
+      });
+    }
+    
+    // Tri chronologique décroissant
+    return events.sort((a, b) => {
+      const dateDiff = new Date(b.date) - new Date(a.date);
+      if (dateDiff === 0 && b.id && a.id) return b.id - a.id;
+      return dateDiff;
+    });
+  }, [asset, transactions, isComposite]);
+
   useEffect(() => {
     if (selectedPosition) {
       const updatedPos = asset.positions?.find(p => p.id === selectedPosition.id);
@@ -1022,7 +1105,11 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     return sortedDates.map(date => {
       const totalAtDate = currentPositions.reduce((sum, pos) => {
         const sortedPosHistory = [...(pos.history || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
-        const exactMatch = sortedPosHistory.find(h => h.date === date);
+        // On filtre pour trouver tous les points de ce jour précis
+        const exactMatches = sortedPosHistory.filter(h => h.date === date);
+        // S'il y en a plusieurs, on prend le tout dernier enregistré
+        const exactMatch = exactMatches.length > 0 ? exactMatches[exactMatches.length - 1] : null;
+        
         if (exactMatch) return sum + exactMatch.value;
         const previousEntries = sortedPosHistory.filter(h => h.date < date);
         const lastEntry = previousEntries.length > 0 ? previousEntries[previousEntries.length - 1] : null;
@@ -1060,7 +1147,8 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
       name: newPosition.name, 
       value: 0, 
       totalInvested: 0, 
-      history: [{ date: today, value: 0 }] 
+      // On lui donne un ID volontairement plus vieux de 1000ms pour qu'il reste en bas du tri
+      history: [{ id: Date.now() - 1000, date: today, value: 0, movementTag: 'creation' }] 
     };
 
     const updatedPositions = [...(asset.positions || []), newPos];
@@ -1073,7 +1161,37 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   };
 
   const handleDeletePosition = (posId) => {
-    const updatedPositions = asset.positions.filter(p => p.id !== posId);
+    const posToDelete = asset.positions.find(p => p.id === posId);
+    if (!posToDelete) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // 1. On retire la position
+    let updatedPositions = asset.positions.filter(p => p.id !== posId);
+
+    // 2. Si c'est une ligne investie, on "rembourse" sa valeur actuelle dans la poche espèces
+    // Cela évite que le graphique global du compte ne s'effondre lors d'une suppression.
+    if (!posToDelete.isCash) {
+      updatedPositions = updatedPositions.map(p => {
+        if (p.isCash) {
+          const refundAmount = posToDelete.value;
+          const newValue = parseFloat((p.value + refundAmount).toFixed(2));
+          
+          let updatedHistory = [...(p.history || [])];
+          const existingIdx = updatedHistory.findIndex(h => h.date === today);
+          if (existingIdx >= 0) {
+            updatedHistory[existingIdx] = { ...updatedHistory[existingIdx], value: newValue };
+          } else {
+            updatedHistory.push({ date: today, value: newValue });
+          }
+          updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+          
+          return { ...p, value: newValue, history: updatedHistory };
+        }
+        return p;
+      });
+    }
+
     const newTotal = updatedPositions.reduce((acc, p) => acc + p.value, 0);
     const newAssetHistory = rebuildGlobalHistory(updatedPositions);
     onUpdate({ ...asset, positions: updatedPositions, value: newTotal, history: newAssetHistory });
@@ -1111,9 +1229,31 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
     const newValue = parseFloat(newPosHistoryPoint.value);
     const date = newPosHistoryPoint.date;
     
-    const historyWithoutDate = (selectedPosition.history || []).filter(h => h.date !== date);
-    const updatedHistory = [...historyWithoutDate, { date: date, value: newValue }];
-    updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+    let updatedHistory = [...(selectedPosition.history || [])];
+    
+    // Calcul de la variation (delta) par rapport à la dernière valeur connue
+    const sortedForPrev = [...updatedHistory].sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff === 0 && a.id && b.id) return a.id - b.id;
+      return dateDiff;
+    });
+    const previousEntry = sortedForPrev.reverse().find(h => h.date <= date);
+    const previousValue = previousEntry ? previousEntry.value : 0;
+    const delta = newValue - previousValue;
+
+    updatedHistory.push({ 
+      id: Date.now(), 
+      date: date, 
+      value: newValue,
+      movementTag: 'evolution',
+      movementAmount: delta
+    });
+    
+    updatedHistory.sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff === 0 && a.id && b.id) return a.id - b.id;
+      return dateDiff;
+    });
     
     const today = new Date().toISOString().split('T')[0];
     const latestPastEntry = [...updatedHistory].reverse().find(h => h.date <= today);
@@ -1136,14 +1276,72 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate }) => {
   };
 
   const handleDeletePositionHistory = (idx) => {
-    const sortedHistory = [...(selectedPosition.history || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // 1. On applique EXACTEMENT le même tri descendant que dans l'affichage visuel
+    const sortedHistory = [...(selectedPosition.history || [])].sort((a, b) => {
+      const dateDiff = new Date(b.date) - new Date(a.date);
+      if (dateDiff === 0 && b.id && a.id) return b.id - a.id;
+      return dateDiff;
+    });
+    
+    // 2. On cible le bon élément et on le retire
     const itemToDelete = sortedHistory[idx];
     const updatedHistory = selectedPosition.history.filter(h => h !== itemToDelete);
-    updatedHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // 3. On retrie correctement l'historique mis à jour en ordre ascendant (chronologique)
+    updatedHistory.sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff === 0 && a.id && b.id) return a.id - b.id;
+      return dateDiff;
+    });
+
+    // 4. RECALCUL DU PRU (Total Investi) en rejouant l'historique restant
+    let newTotalInvested = 0;
+    updatedHistory.forEach(point => {
+      if (point.movementTag === 'buy' && point.movementAmount) {
+        newTotalInvested += point.movementAmount;
+      } else if (point.movementTag === 'sell' && point.movementAmount) {
+        const prevValue = point.value + point.movementAmount;
+        if (prevValue > 0) {
+          const ratio = point.movementAmount / prevValue;
+          newTotalInvested -= (newTotalInvested * ratio);
+        }
+      } else if (point.movementTag === 'creation') {
+        newTotalInvested = 0;
+      }
+    });
+    if (newTotalInvested < 0) newTotalInvested = 0;
+    
     const today = new Date().toISOString().split('T')[0];
     const latestPastEntry = [...updatedHistory].reverse().find(h => h.date <= today);
     const newPosValue = latestPastEntry ? latestPastEntry.value : (updatedHistory.length === 0 ? 0 : selectedPosition.value);
-    const updatedPositions = asset.positions.map(p => p.id === selectedPosition.id ? { ...p, history: updatedHistory, value: newPosValue } : p);
+    
+    // 5. Mise à jour de la position ET annulation du mouvement sur la poche Cash
+    const updatedPositions = asset.positions.map(p => {
+      if (p.id === selectedPosition.id) {
+        return { ...p, history: updatedHistory, value: newPosValue, totalInvested: parseFloat(newTotalInvested.toFixed(2)) };
+      }
+      
+      // Restitution/Débit sur la poche espèces si c'était un achat/vente
+      if (p.isCash && (itemToDelete.movementTag === 'buy' || itemToDelete.movementTag === 'sell') && itemToDelete.movementAmount) {
+        // Annuler un Achat = Recréditer le cash (+). Annuler une Vente = Redébiter le cash (-)
+        const delta = itemToDelete.movementTag === 'buy' ? itemToDelete.movementAmount : -itemToDelete.movementAmount;
+        
+        // On propage la correction sur tout l'historique du Cash à partir de la date du mouvement annulé
+        let updatedCashHistory = (p.history || []).map(h => {
+           if (h.date >= itemToDelete.date) {
+               return { ...h, value: parseFloat((h.value + delta).toFixed(2)) };
+           }
+           return h;
+        });
+        
+        const latestCash = [...updatedCashHistory].sort((a, b) => a.date.localeCompare(b.date)).reverse().find(h => h.date <= today);
+        const currentCashValue = latestCash ? latestCash.value : parseFloat((p.value + delta).toFixed(2));
+        
+        return { ...p, value: currentCashValue, history: updatedCashHistory };
+      }
+      return p;
+    });
+    
     const newAssetTotal = updatedPositions.reduce((sum, p) => sum + p.value, 0);
     const newAssetHistory = rebuildGlobalHistory(updatedPositions);
     onUpdate({ ...asset, positions: updatedPositions, value: newAssetTotal, history: newAssetHistory });
@@ -1505,20 +1703,41 @@ return (
                     </div>
                   </Card>
                   <Card className="overflow-hidden border-slate-200 p-0">
-                    <div className="bg-slate-50 p-4 border-b border-slate-100 font-bold">Historique Global</div>
+                    <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                      <h3 className="font-bold text-slate-700">{isComposite ? "Journal des Opérations" : "Historique Global"}</h3>
+                    </div>
                     <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                      {(!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
-                        <div key={idx} className="p-3 flex justify-between items-center group hover:bg-slate-50">
-                          <span className="text-sm text-slate-600 flex items-center gap-2">
-                            {new Date(point.date).toLocaleDateString()}
-                            {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>}
-                          </span>
-                          <div className="flex items-center gap-4">
-                            <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
-                            {!isComposite && <button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>}
+                      {isComposite ? (
+                        unifiedHistory.length === 0 ? <div className="p-4 text-center text-slate-400">Aucune opération enregistrée.</div> : unifiedHistory.map((event, idx) => (
+                          <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-full flex-shrink-0 ${event.isExternal ? (event.type === 'in' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600') : (event.type === 'buy' ? 'bg-indigo-100 text-indigo-600' : 'bg-orange-100 text-orange-600')}`}>
+                                {event.isExternal ? (event.type === 'in' ? <ArrowDownRight size={14}/> : <ArrowUpRight size={14}/>) : (event.type === 'buy' ? <PlusCircle size={14}/> : <ArrowRightLeft size={14}/>)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-slate-800 truncate max-w-[150px] md:max-w-[250px]">{event.label}</p>
+                                <p className="text-[10px] text-slate-500">{new Date(event.date).toLocaleDateString()} • {event.isExternal ? (event.type === 'in' ? 'Virement Entrant' : 'Virement Sortant') : (event.type === 'buy' ? 'Achat Support' : 'Vente Support')}</p>
+                              </div>
+                            </div>
+                            <span className={`font-bold text-sm flex-shrink-0 ${event.isExternal ? (event.type === 'in' ? 'text-green-600' : 'text-red-600') : (event.type === 'buy' ? 'text-indigo-600' : 'text-orange-600')}`}>
+                              {event.type === 'in' || event.type === 'buy' ? '+' : '-'}{formatCurrency(event.amount)}
+                            </span>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      ) : (
+                        (!asset.history || asset.history.length === 0) ? <div className="p-4 text-center text-slate-400">Aucun historique.</div> : [...asset.history].sort((a,b) => new Date(b.date) - new Date(a.date)).map((point, idx) => (
+                          <div key={idx} className="p-3 flex justify-between items-center group hover:bg-slate-50">
+                            <span className="text-sm text-slate-600 flex items-center gap-2">
+                              {new Date(point.date).toLocaleDateString()}
+                              {new Date(point.date) > new Date() && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">Prév.</span>}
+                            </span>
+                            <div className="flex items-center gap-4">
+                              <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
+                              <button onClick={() => setDeleteConfig({ type: 'assetHistory', id: idx })} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </Card>
                 </div>
@@ -1544,7 +1763,28 @@ return (
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50">
             <div>
               <button onClick={() => setViewMode('asset')} className="flex items-center gap-1 text-slate-500 hover:text-slate-800 mb-2 text-sm font-medium"><ChevronLeft size={16} /> Retour</button>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingDown size={24} className="text-purple-600"/>{selectedPosition.name}</h2>
+              <div className="flex items-center gap-2">
+                <TrendingDown size={24} className="text-purple-600"/>
+                {isEditingPosName ? (
+                  <input 
+                    type="text" 
+                    value={editedPosName} 
+                    onChange={(e) => setEditedPosName(e.target.value)}
+                    onBlur={handleSavePosName}
+                    onKeyDown={handleKeyDownPosName}
+                    autoFocus
+                    className="text-2xl font-bold text-slate-800 bg-transparent border-b-2 border-purple-500 outline-none w-full max-w-[250px]"
+                  />
+                ) : (
+                  <h2 
+                    onClick={() => setIsEditingPosName(true)}
+                    className="text-2xl font-bold text-slate-800 hover:text-purple-600 cursor-text transition-colors border-b-2 border-transparent hover:border-purple-200 border-dashed"
+                    title="Modifier le nom"
+                  >
+                    {selectedPosition.name}
+                  </h2>
+                )}
+              </div>
             </div>
             <div className="text-right">
               <p className="text-sm text-slate-500">Valeur Actuelle (Marché)</p>
@@ -1615,16 +1855,20 @@ return (
                   <div className="bg-slate-50 p-4 border-b border-slate-100 font-bold">Historique de la ligne</div>
                   <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
                     {[...(selectedPosition.history || [])]
-                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                      .sort((a, b) => {
+                        const dateDiff = new Date(b.date) - new Date(a.date);
+                        if (dateDiff === 0 && b.id && a.id) return b.id - a.id;
+                        return dateDiff;
+                      })
                       .map((point, idx) => (
                         <div key={idx} className="p-3 flex justify-between items-center hover:bg-slate-50 group">
                           <span className="text-sm text-slate-600 flex items-center gap-2">
                             {new Date(point.date).toLocaleDateString()}
                             
                             {/* AFFICHAGE DU TAG SI MOUVEMENT */}
-                            {point.movementTag && (
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${point.movementTag === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {point.movementTag === 'buy' ? 'ACHAT' : 'VENTE'}
+                            {point.movementTag && point.movementTag !== 'creation' && (
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${point.movementTag === 'buy' ? 'bg-green-100 text-green-700' : point.movementTag === 'sell' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {point.movementTag === 'buy' ? 'ACHAT' : point.movementTag === 'sell' ? 'VENTE' : 'ÉVOLUTION'}
                               </span>
                             )}
                             
@@ -1634,7 +1878,21 @@ return (
                           </span>
                           
                           <div className="flex items-center gap-4">
-                            <span className="font-bold text-slate-900">{formatCurrency(point.value)}</span>
+                            <div className="text-right flex flex-col items-end">
+                               {point.movementAmount !== undefined && point.movementTag !== 'creation' && (
+                                  <span className={`text-xs font-bold ${
+                                    point.movementTag === 'buy' ? 'text-green-600' : 
+                                    point.movementTag === 'sell' ? 'text-red-600' : 
+                                    point.movementAmount > 0 ? 'text-blue-600' : 
+                                    point.movementAmount < 0 ? 'text-orange-500' : 'text-slate-500'
+                                  }`}>
+                                    {point.movementTag === 'buy' ? '+' : point.movementTag === 'sell' ? '-' : point.movementAmount > 0 ? '+' : ''}{formatCurrency(point.movementTag === 'sell' ? point.movementAmount : point.movementAmount)}
+                                  </span>
+                               )}
+                               <span className={(point.movementTag && point.movementTag !== 'creation') ? "text-[10px] text-slate-500" : "font-bold text-slate-900"}>
+                                  {(point.movementTag && point.movementTag !== 'creation') ? `Solde: ${formatCurrency(point.value)}` : formatCurrency(point.value)}
+                               </span>
+                            </div>
                             <button 
                               onClick={() => setDeleteConfig({ type: 'posHistory', id: idx })} 
                               className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
@@ -2159,7 +2417,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
 
 // ... AssetsView, BudgetView, AiAdvisorView remain largely the same, skipped for brevity but would be here ...
 
-const AssetsView = ({ assets, setAssets }) => {
+const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
   // Ajoutez ceci au tout début :
   if (assets === null) {
     return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
@@ -2170,7 +2428,7 @@ const AssetsView = ({ assets, setAssets }) => {
   const [assetToDelete, setAssetToDelete] = useState(null);
   const [focusedAssetId, setFocusedAssetId] = useState(null);
 
-  const isCompositeType = (type) => ['investissement', 'crypto', 'immobilier', 'autre', 'epargne_salariale'].includes(type);
+  const isCompositeType = (type) => type !== 'liquidite';
 
   const handleAdd = (e) => {
     e.preventDefault();
@@ -2213,10 +2471,16 @@ const AssetsView = ({ assets, setAssets }) => {
     setIsFormOpen(false);
   };
 
-  const handleDelete = (id) => setAssets(assets.filter(a => a.id !== id));
+  const handleDelete = (id) => {
+    if (onDeleteAsset) {
+      onDeleteAsset(id);
+    } else {
+      setAssets(assets.filter(a => a.id !== id));
+    }
+  };
   const handleUpdateAsset = (updatedAsset) => {
-    // Si c'est un investissement, on s'assure qu'il y a une poche espèces
-    if (['investissement', 'epargne_salariale', 'crypto'].includes(updatedAsset.type)) {
+    // Si ce n'est pas un livret, on s'assure qu'il y a une poche espèces
+    if (updatedAsset.type !== 'liquidite') {
       const hasCash = updatedAsset.positions?.some(p => p.isCash);
       if (!hasCash) {
         updatedAsset.positions = [
@@ -2233,7 +2497,7 @@ const AssetsView = ({ assets, setAssets }) => {
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={() => { handleDelete(assetToDelete); setAssetToDelete(null); }} message="Supprimer ce compte ?" />
-      {selectedAsset && (<AssetDetailOverlay key={selectedAsset.id} asset={selectedAsset} onClose={() => setSelectedAsset(null)} onUpdate={handleUpdateAsset} />)}
+      {selectedAsset && (<AssetDetailOverlay key={selectedAsset.id} asset={selectedAsset} onClose={() => setSelectedAsset(null)} onUpdate={handleUpdateAsset} transactions={transactions} />)}
       {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant={isFormOpen ? "secondary" : "primary"} className="transition-all duration-300 min-w-[120px]">{isFormOpen ? <><X size={20} /> Annuler</> : <><PlusCircle size={20} /> Ajouter</>}</Button></div>)}
       {isFormOpen && (
         <Card className="bg-blue-50 border-blue-100 animate-in slide-in-from-top-4 fade-in duration-300 origin-top">
@@ -2698,6 +2962,38 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
     }).join('\n');
 
     const fluxRecents = transactions.slice(0, 15).map(t => `- ${t.date}: ${t.label} (${t.amount}€) [Catégorie: ${t.category || t.type}]`).join('\n');
+
+    // NOUVEAU : Extraction des 10 derniers mouvements internes (Achats/Ventes sur supports)
+    const allInternalMovements = [];
+    assets.forEach(a => {
+      (a.positions || []).forEach(p => {
+        if (!p.isCash && p.history) {
+          p.history.forEach(h => {
+            if (h.movementTag === 'buy' || h.movementTag === 'sell') {
+               allInternalMovements.push({
+                 id: h.id || 0,
+                 date: h.date,
+                 assetName: a.name,
+                 posName: p.name,
+                 type: h.movementTag,
+                 amount: h.movementAmount || 0
+               });
+            }
+          });
+        }
+      });
+    });
+    
+    // Tri par date décroissante puis par ID pour avoir l'ordre chronologique exact
+    allInternalMovements.sort((a, b) => {
+      const dateDiff = new Date(b.date) - new Date(a.date);
+      if (dateDiff === 0 && b.id && a.id) return b.id - a.id;
+      return dateDiff;
+    });
+
+    const mouvementsInternesRecents = allInternalMovements.slice(0, 10).map(m => 
+      `- ${m.date} : ${m.type === 'buy' ? 'ACHAT' : 'VENTE'} de ${m.amount}€ sur ${m.posName} (Compte: ${m.assetName})`
+    ).join('\n');
 
     const systemPrompt = `
       Tu es l'Expert en Stratégie Patrimoniale de MyWealth.io.
@@ -3337,7 +3633,7 @@ const showToast = (msg) => setToast({ message: msg });
       if (new Date(h.date) >= new Date(date)) { 
         // Si c'est un investissement et que le delta est positif (virement entrant), 
         // on augmente aussi la valeur investie
-        const isInvestedCompte = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+        const isInvestedCompte = asset.type !== 'liquidite';
         const investedDelta = isInvestedCompte ? delta : 0;
         return { 
           ...h, 
@@ -3354,7 +3650,7 @@ const showToast = (msg) => setToast({ message: msg });
       const previousEntry = [...sorted].reverse().find(h => new Date(h.date) < new Date(date));
       const baseValue = previousEntry ? previousEntry.value : 0; 
       const baseInvested = previousEntry ? (previousEntry.investedValue || previousEntry.value) : 0;
-      const isInvestedCompte = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      const isInvestedCompte = asset.type !== 'liquidite';
       const investedDelta = isInvestedCompte ? delta : 0;
       
       updatedHistory.push({ 
@@ -3391,7 +3687,7 @@ const showToast = (msg) => setToast({ message: msg });
         : parseFloat((asset.value + (date <= today ? delta : 0)).toFixed(2));
 
       // Mise à jour de la poche Cash pour les comptes composites
-      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      const isComposite = asset.type !== 'liquidite';
       let positions = asset.positions || [];
       
       if (isComposite) {
@@ -3399,10 +3695,17 @@ const showToast = (msg) => setToast({ message: msg });
           positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
         }
         
-        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
-        positions = positions.map(p => 
-          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
-        );
+        positions = positions.map(p => {
+          if (p.isCash) {
+            // On utilise ton helper existant pour propager le virement dans le temps sur le Cash
+            const newCashHistory = updateAssetHistoryWithDelta(p, date, delta);
+            const sortedCashHistory = [...newCashHistory].sort((a, b) => a.date.localeCompare(b.date));
+            const latestCash = [...sortedCashHistory].reverse().find(h => h.date <= today);
+            const currentCashValue = latestCash ? latestCash.value : parseFloat((p.value + (date <= today ? delta : 0)).toFixed(2));
+            return { ...p, value: currentCashValue, history: newCashHistory };
+          }
+          return p;
+        });
       }
 
       currentAssets[idx] = { 
@@ -3445,14 +3748,23 @@ const showToast = (msg) => setToast({ message: msg });
       const latestPastOrPresent = [...sortedHistory].reverse().find(h => h.date <= today);
       const currentRealValue = latestPastOrPresent ? latestPastOrPresent.value : asset.value;
 
-      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      const isComposite = asset.type !== 'liquidite';
       let positions = asset.positions || [];
       
       if (isComposite) {
-        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
-        positions = positions.map(p => 
-          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
-        );
+        if (!positions.some(p => p.isCash)) {
+          positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
+        }
+        positions = positions.map(p => {
+          if (p.isCash) {
+            const newCashHistory = updateAssetHistoryWithDelta(p, date, delta);
+            const sortedCashHistory = [...newCashHistory].sort((a, b) => a.date.localeCompare(b.date));
+            const latestCash = [...sortedCashHistory].reverse().find(h => h.date <= today);
+            const currentCashValue = latestCash ? latestCash.value : parseFloat((p.value + (date <= today ? delta : 0)).toFixed(2));
+            return { ...p, value: currentCashValue, history: newCashHistory };
+          }
+          return p;
+        });
       }
 
       currentAssets[idx] = { ...asset, value: currentRealValue, positions, history: updatedHistory };
@@ -3498,14 +3810,23 @@ const showToast = (msg) => setToast({ message: msg });
       const latestPastOrPresent = [...sortedHistory].reverse().find(h => h.date <= today);
       const currentRealValue = latestPastOrPresent ? latestPastOrPresent.value : asset.value;
 
-      const isComposite = ['investissement', 'epargne_salariale', 'crypto'].includes(asset.type);
+      const isComposite = asset.type !== 'liquidite';
       let positions = asset.positions || [];
       
       if (isComposite) {
-        const otherPosValue = positions.filter(p => !p.isCash).reduce((sum, p) => sum + p.value, 0);
-        positions = positions.map(p => 
-          p.isCash ? { ...p, value: parseFloat((currentRealValue - otherPosValue).toFixed(2)) } : p
-        );
+        if (!positions.some(p => p.isCash)) {
+          positions.push({ id: 'cash_pouch', name: '💰 Espèces', value: 0, isCash: true, history: [] });
+        }
+        positions = positions.map(p => {
+          if (p.isCash) {
+            const newCashHistory = updateAssetHistoryWithDelta(p, date, delta);
+            const sortedCashHistory = [...newCashHistory].sort((a, b) => a.date.localeCompare(b.date));
+            const latestCash = [...sortedCashHistory].reverse().find(h => h.date <= today);
+            const currentCashValue = latestCash ? latestCash.value : parseFloat((p.value + (date <= today ? delta : 0)).toFixed(2));
+            return { ...p, value: currentCashValue, history: newCashHistory };
+          }
+          return p;
+        });
       }
 
       currentAssets[idx] = { ...asset, value: currentRealValue, positions, history: updatedHistory };
@@ -3524,6 +3845,27 @@ const showToast = (msg) => setToast({ message: msg });
     saveTransactions(newTransactions);
     setAssets(currentAssets);
     saveAssets(currentAssets);
+  };
+
+  const handleDeleteAsset = (assetId) => {
+    if (!user) return;
+    
+    // 1. Supprimer l'actif
+    const newAssets = assets.filter(a => a.id !== assetId);
+    setAssets(newAssets);
+    saveAssets(newAssets);
+
+    // 2. Supprimer TOUTES les transactions liées en cascade
+    const newTransactions = transactions.filter(t => 
+      t.linkedAssetId !== assetId && 
+      t.fromId !== assetId && 
+      t.toId !== assetId
+    );
+    
+    if (newTransactions.length !== transactions.length) {
+      setTransactions(newTransactions);
+      saveTransactions(newTransactions);
+    }
   };
 
   const handleRestoreBackup = async (backupData) => {
@@ -3709,7 +4051,7 @@ const showToast = (msg) => setToast({ message: msg });
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
         {activeTab === 'dashboard' && <DashboardView assets={assets} transactions={transactions} setActiveTab={setActiveTab} onDeleteTransaction={handleDeleteTransaction} userProfile={userProfile} />}
-        {activeTab === 'assets' && <AssetsView assets={assets} setAssets={handleSetAssets} />}
+        {activeTab === 'assets' && <AssetsView assets={assets} setAssets={handleSetAssets} transactions={transactions} onDeleteAsset={handleDeleteAsset} />}
         {activeTab === 'budget' && (
           <BudgetView
             transactions={transactions}
