@@ -242,11 +242,15 @@ async function callGeminiAPI(systemPrompt, userPrompt, imageBase64 = null) {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      // On passe sur v1beta et gemini-2.5-flash pour supporter l'outil Google Search
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: "user", parts }] })
+        body: JSON.stringify({ 
+          contents: [{ role: "user", parts }],
+          tools: [{ googleSearch: {} }] // Activation de la recherche Web
+        })
       }
     );
     if (!response.ok) {
@@ -600,7 +604,15 @@ const MessageBubble = ({ message }) => {
 
       if (isHeader2) content = line.replace('## ', '');
       if (isHeader3) content = line.replace('### ', '');
-      if (isList) content = line.replace(/^[-*]\s/, '');
+      
+      // Amélioration de la détection des listes (gère les espaces au début)
+      const listMatch = line.match(/^(\s*)[-*]\s(.*)/);
+      let indentLevel = 0;
+      if (listMatch) {
+        isList = true;
+        indentLevel = listMatch[1].length; // Compte les espaces pour l'indentation
+        content = listMatch[2]; // Garde uniquement le texte
+      }
 
       // Logique pour transformer les <b> en vrais éléments HTML gras
       const parts = content.split(/(<b>.*?<\/b>)/g);
@@ -614,7 +626,7 @@ const MessageBubble = ({ message }) => {
       if (isHeader2) return <h3 key={index} className="text-lg font-bold text-indigo-700 mt-4 mb-2">{renderedLine}</h3>;
       if (isHeader3) return <h4 key={index} className="text-base font-bold text-indigo-900 mt-3 mb-1">{renderedLine}</h4>;
       if (isList) return (
-        <div key={index} className="flex gap-2 ml-1 mb-1">
+        <div key={index} className={`flex gap-2 mb-1`} style={{ marginLeft: `${(indentLevel * 0.5) + 0.25}rem` }}>
           <span className="text-indigo-400 mt-1.5 w-1.5 h-1.5 bg-indigo-400 rounded-full flex-shrink-0 block"></span>
           <span className="text-slate-700">{renderedLine}</span>
         </div>
@@ -2648,50 +2660,72 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
     setSelectedImage(null);
     setIsLoading(true);
 
-    // SYNTHÈSE PATRIMONIALE DÉTAILLÉE (Connaissance des supports)
+    // SYNTHÈSE PATRIMONIALE DÉTAILLÉE (Connaissance des supports & KPIs)
     const totalPatrimoine = assets.reduce((acc, item) => acc + item.value, 0);
+    const liquidites = assets.filter(a => a.type === 'liquidite').reduce((acc, a) => acc + a.value, 0);
+    const investissements = assets.filter(a => ['investissement', 'crypto', 'immobilier', 'epargne_salariale'].includes(a.type)).reduce((acc, a) => acc + a.value, 0);
+
     const age = userProfile?.birthDate ? (new Date().getFullYear() - new Date(userProfile.birthDate).getFullYear()) : 'Non précisé';
     const revenuMensuel = userProfile?.monthlyIncome ? formatCurrency(Number(userProfile.monthlyIncome)) : 'Non précisé';
     
     const detailActifs = assets.map(a => {
       let line = `- ${a.name}: ${formatCurrency(a.value)} (${CATEGORY_LABELS[a.type]})`;
-      // Si le compte a des positions (supports), on les ajoute au contexte
+      
+      // Calcul des plus-values et PRU pour les comptes d'investissement
       if (a.positions && a.positions.length > 0) {
+        const supports = a.positions.filter(p => !p.isCash);
+        const totalInvestiActif = supports.reduce((sum, p) => sum + (p.totalInvested || 0), 0);
+        const valeurSupportsActif = supports.reduce((sum, p) => sum + p.value, 0);
+        const pvActif = valeurSupportsActif - totalInvestiActif;
+        const pvPctActif = totalInvestiActif > 0 ? (pvActif / totalInvestiActif) * 100 : 0;
+        
+        if (totalInvestiActif > 0) {
+           line += ` | Total investi: ${formatCurrency(totalInvestiActif)} | Plus-value latente: ${pvActif >= 0 ? '+' : ''}${formatCurrency(pvActif)} (${pvPctActif.toFixed(2)}%)`;
+        }
+
         const posDetail = a.positions
-          .filter(p => p.value > 0) // On ignore les lignes vides pour économiser des tokens
-          .map(p => `  └─ ${p.name}: ${formatCurrency(p.value)}`)
+          .filter(p => p.value > 0 || p.totalInvested > 0)
+          .map(p => {
+            if (p.isCash) return `  └─ ${p.name}: ${formatCurrency(p.value)}`;
+            const pv = p.value - (p.totalInvested || 0);
+            const pct = p.totalInvested > 0 ? (pv / p.totalInvested) * 100 : 0;
+            return `  └─ ${p.name}: ${formatCurrency(p.value)} (PRU: ${formatCurrency(p.totalInvested || 0)} | PV: ${pv >= 0 ? '+' : ''}${pv.toFixed(2)}€ / ${pv >= 0 ? '+' : ''}${pct.toFixed(2)}%)`;
+          })
           .join('\n');
         if (posDetail) line += `\n${posDetail}`;
       }
       return line;
     }).join('\n');
 
-    const fluxRecents = transactions.slice(0, 15).map(t => `- ${t.date}: ${t.label} (${t.amount}€)`).join('\n');
+    const fluxRecents = transactions.slice(0, 15).map(t => `- ${t.date}: ${t.label} (${t.amount}€) [Catégorie: ${t.category || t.type}]`).join('\n');
 
     const systemPrompt = `
-      Tu es l'Expert en Stratégie Patrimoniale de MyWealth.io. Réponds de façon DIRECTE, CONCISE et CIBLÉE.
+      Tu es l'Expert en Stratégie Patrimoniale de MyWealth.io.
       
-      CONSIGNE CRITIQUE : Réponds uniquement à la question posée. Ne fais PAS de résumé global du patrimoine (Livret A, profil de risque, etc.) si la question porte sur un sujet précis comme un PEE. Va droit au but.
-
-      CONTEXTE TECHNIQUE :
-      - Profil Utilisateur : ${userProfile?.firstName}, ${age} ans.
-      - Revenu Mensuel : ${revenuMensuel}.
+      CONTEXTE FINANCIER GLOBAL :
+      - Patrimoine Net : ${formatCurrency(totalPatrimoine)}
+      - Liquidités (Sécurité) : ${formatCurrency(liquidites)}
+      - Actifs Investis (Croissance) : ${formatCurrency(investissements)}
+      - Profil Utilisateur : ${userProfile?.firstName}, ${age} ans. Revenu Mensuel : ${revenuMensuel}.
       - Risque : ${userProfile?.riskProfile || 'Equilibré'} (Objectif: ${userProfile?.financialGoal || 'Indépendance'})
-      - Actifs & Supports détaillés : 
+      
+      DÉTAIL DES ACTIFS ET SUPPORTS (avec Plus-values latentes) : 
       ${detailActifs}
-      - Flux récents : ${fluxRecents}
+      
+      FLUX RÉCENTS (Dépenses/Revenus) :
+      ${fluxRecents}
 
       RÈGLES D'OR :
-      1. RÉPONSE CIBLÉE : Si l'utilisateur pose une question sur un support spécifique, n'analyse QUE ce support.
-      2. PAS DE BLABLA MAIS AGREABLE : Si la réponse tient en deux phrases, n'en fais pas dix. Supprime les introductions polies inutiles. Cependant si la réponse est négative, pose une question ouverte après afin de creuser le sujet. Fait aussi en sorte que la réponse ai l'aire joviale et agréable.
-      3. ANALYSE IMAGE : Si une image est jointe, compare ses données uniquement avec les actifs concernés par la question.
+      1. CONSEIL STRATÉGIQUE : Utilise les données fournies (Plus-values, PRU, répartition Cash/Investi) pour donner des conseils précis (ex: "Ton ETF S&P500 est en forte hausse de +15%, tu pourrais en sécuriser une partie en cash").
+      2. RECHERCHE WEB OBLIGATOIRE : Tu AS ACCÈS à la recherche Google. Utilise-la silencieusement pour vérifier l'état actuel des marchés financiers, les cours des actions/ETF/Cryptos ou l'actualité macro-économique avant de formuler tes conseils.
+      3. PAS DE BLABLA MAIS AGRÉABLE : Va droit au but. Sois jovial et professionnel. Pose une question ouverte à la fin pour creuser la stratégie de l'utilisateur si pertinent.
+      4. ANALYSE IMAGE : Si une image est jointe, compare ses données avec le contexte patrimonial ci-dessus.
 
       FORMATTAGE :
       - ## pour les titres.
       - - pour les listes.
-      - <b>texte</b> pour mettre en gras les chiffres clés.
+      - <b>texte</b> pour mettre en gras les chiffres clés ou tickers.
       - JAMAIS de symboles * ou # standards.
-      - Possibilité de mettre quelques emojis pour mettre en valeur les réponses ou la rendre plus aggréable, mais n'en abuses pas.
     `;
 
     try {
@@ -2704,7 +2738,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 h-[calc(100vh-140px)] md:h-[calc(100vh-140px)] animate-in fade-in pb-20 md:pb-0">
+    <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 h-[calc(100vh-190px)] md:h-[calc(100vh-140px)] animate-in fade-in w-full">
       {/* Sidebar - Actions Rapides (Scroll horizontal sur mobile) */}
       <div className="w-full lg:w-1/4 flex-shrink-0 flex flex-col gap-4">
         <div className="bg-indigo-50 border border-indigo-100 p-3 md:p-4 rounded-xl shadow-sm">
@@ -2751,7 +2785,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
       </div>
 
       {/* Zone de Chat */}
-      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
           <h3 className="font-bold text-slate-700 flex items-center gap-2"><Bot size={20} className="text-indigo-600"/> Conseiller MyWealth</h3>
           <span className="text-[10px] bg-slate-200 px-2 py-1 rounded-full text-slate-600 font-bold">MODE EXPERT</span>
@@ -2783,7 +2817,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
               <button onClick={() => setSelectedImage(null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm"><X size={12}/></button>
             </div>
           )}
-          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex items-center gap-2 w-full">
             <input 
               type="file" 
               accept="image/*,application/pdf" 
@@ -2794,7 +2828,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
             <button 
               type="button" 
               onClick={() => fileInputRef.current.click()}
-              className="p-3 text-slate-500 hover:text-indigo-600 bg-slate-50 rounded-xl border border-slate-200 transition-all"
+              className="shrink-0 p-3 text-slate-500 hover:text-indigo-600 bg-slate-50 rounded-xl border border-slate-200 transition-all"
             >
               <Cloud size={20} />
             </button>
@@ -2802,11 +2836,11 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
               type="text" 
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
-              placeholder="Posez une question ou partagez une capture..."
-              className="flex-1 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              placeholder="Posez une question..."
+              className="flex-1 min-w-0 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm md:text-base"
               disabled={isLoading} 
             />
-            <Button variant="magic" disabled={isLoading || (!input.trim() && !selectedImage)} type="submit">
+            <Button variant="magic" disabled={isLoading || (!input.trim() && !selectedImage)} type="submit" className="shrink-0 px-3 py-3 md:px-4 flex items-center justify-center">
               <Send size={18} />
             </Button>
           </form>
