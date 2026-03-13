@@ -412,11 +412,11 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Objectif Principal</label>
                     <div className="space-y-1">
                       <select name="financialGoal" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none bg-white font-medium" value={formData.financialGoal} onChange={handleChange}>
-                          <option value="freedom">Indépendance Financière </option>
-                          <option value="retirement">Préparer ma Retraite </option>
-                          <option value="real_estate">Projet Immobilier </option>
-                          <option value="safety">Sécurité </option>
-                          <option value="growth">Maximiser mon Capital </option>
+                          <option value="freedom">Liberté Financière</option>
+                          <option value="retirement">Préparer ma Retraite</option>
+                          <option value="real_estate">Projet Immobilier</option>
+                          <option value="safety">Sécurité Financière</option>
+                          <option value="growth">Croissance du Capital</option>
                           <option value="other">Autre</option>
                       </select>
                       <p className="text-[10px] text-slate-500 italic px-1">
@@ -3508,10 +3508,10 @@ const LoginScreen = ({ onLogin, onEmailLogin, onEmailRegister, onGoogleLogin, on
                     <div>
                         <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1">Objectif Principal</label>
                         <select className="w-full p-2 rounded-lg border border-slate-300 text-sm bg-white" value={financialGoal} onChange={(e) => setFinancialGoal(e.target.value)}>
-                            <option value="freedom">Liberté Financière / FIRE</option>
-                            <option value="retirement">Préparer sa retraite</option>
-                            <option value="real_estate">Achat Immobilier</option>
-                            <option value="safety">Épargne de précaution</option>
+                            <option value="freedom">Liberté Financière</option>
+                            <option value="retirement">Préparer ma Retraite</option>
+                            <option value="real_estate">Projet Immobilier</option>
+                            <option value="safety">Sécurité Financière</option>
                             <option value="growth">Croissance du capital</option>
                             <option value="other">Autre</option>
                         </select>
