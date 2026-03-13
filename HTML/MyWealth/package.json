@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "deploy:sim": "npm run build && firebase deploy --only hosting:app-sim",
-  "deploy:prd": "npm run build && firebase deploy --only hosting:app-prd"
+    "dev": "vite",
+    "build": "vite build",
+    "deploy:sim": "npm run build && firebase deploy --only hosting:app-sim",
+    "deploy:prd": "npm run build && firebase deploy --only hosting:app-prd"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -15,6 +15,8 @@
     "lucide-react": "^0.561.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-is": "^19.2.4",
+    "react-joyride": "^2.9.3",
     "recharts": "^3.5.1",
     "tailwind": "^2.3.1"
   },

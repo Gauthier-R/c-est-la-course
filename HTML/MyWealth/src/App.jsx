@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import emailjs from '@emailjs/browser';
+import Joyride, { STATUS } from 'react-joyride';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -645,12 +646,12 @@ const MessageBubble = ({ message }) => {
   );
 };
 
-const EmptyState = ({ title, description, actionLabel, onAction, icon: Icon }) => (
+const EmptyState = ({ title, description, actionLabel, onAction, icon: Icon, actionClassName = "" }) => (
   <div className="flex flex-col items-center justify-center p-10 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
     <div className="p-4 bg-white rounded-full shadow-sm mb-4"><Icon size={32} className="text-slate-400" /></div>
     <h3 className="text-lg font-bold text-slate-800 mb-2">{title}</h3>
     <p className="text-slate-500 mb-6 max-w-xs">{description}</p>
-    {actionLabel && <Button onClick={onAction}>{actionLabel}</Button>}
+    {actionLabel && <Button onClick={onAction} className={actionClassName}>{actionLabel}</Button>}
   </div>
 );
 
@@ -1476,7 +1477,7 @@ return (
                   <div className="flex items-center gap-2">
                     <h2 
                       onClick={() => setIsEditingName(true)}
-                      className="text-xl md:text-2xl font-bold text-slate-800 hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
+                      className="tour-asset-name text-xl md:text-2xl font-bold text-slate-800 hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
                       title="Modifier le nom"
                     >
                       {asset.name}
@@ -1490,7 +1491,7 @@ return (
                           setShowPrimaryModal(true);
                         }
                       }}
-                      className={`p-1.5 rounded-full transition-all ${asset.isPrimary ? 'text-amber-400 bg-amber-50 hover:bg-amber-100 shadow-sm' : 'text-slate-300 hover:text-amber-400 hover:bg-slate-50'}`}
+                      className={`tour-asset-primary p-1.5 rounded-full transition-all ${asset.isPrimary ? 'text-amber-400 bg-amber-50 hover:bg-amber-100 shadow-sm' : 'text-slate-300 hover:text-amber-400 hover:bg-slate-50'}`}
                       title={asset.isPrimary ? "Compte principal" : "Définir comme compte principal"}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={asset.isPrimary ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -1548,7 +1549,7 @@ return (
                 )}
               </div>
             </div>
-            <div className="text-right">
+            <div className="tour-asset-value text-right">
               <p className="text-xs md:text-sm text-slate-500">Valorisation Actuelle</p>
               <p className="text-xl md:text-3xl font-bold text-blue-600">{formatCurrency(asset.value)}</p>
             </div>
@@ -1572,7 +1573,7 @@ return (
             </button>
             <button 
               onClick={() => setActiveTab('analysis')}
-              className={`px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
+              className={`tour-asset-ai-tab px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'analysis' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
             >
               Analyse IA ✨
             </button>
@@ -1716,7 +1717,7 @@ return (
             {/* CONTENU ONGLET : HISTORIQUE */}
             {activeTab === 'history' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-                <div className="space-y-6">
+                <div className="tour-asset-update space-y-6">
                   {isComposite ? (
                     <Card className="h-fit bg-indigo-50 border-indigo-100">
                       <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Info size={20} /> Mode Synchronisé</h3>
@@ -1743,7 +1744,7 @@ return (
                   )}
                 </div>
                 <div className="lg:col-span-2 space-y-6">
-                  <Card className="border-slate-200">
+                  <Card className="tour-asset-chart border-slate-200">
                     <h3 className="font-bold text-slate-800 mb-4">Évolution du solde</h3>
                     <div className="h-64 w-full">
                       <ResponsiveContainer width="100%" height="100%">
@@ -1757,7 +1758,7 @@ return (
                       </ResponsiveContainer>
                     </div>
                   </Card>
-                  <Card className="overflow-hidden border-slate-200 p-0">
+                  <Card className="tour-asset-history overflow-hidden border-slate-200 p-0">
                     <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700">{isComposite ? "Journal des Opérations" : "Historique Global"}</h3>
                     </div>
@@ -2205,7 +2206,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6 animate-in fade-in">
         <div className="p-6 bg-white rounded-full shadow-lg text-blue-600 mb-2"><TrendingUp size={48} /></div>
         <h2 className="text-2xl font-bold text-slate-800">Bienvenue {userProfile?.firstName || ''} sur votre Tableau de Bord</h2>
-        <Button onClick={() => setActiveTab('assets')} className="shadow-lg hover:scale-105 transition-transform">Commencer maintenant <ArrowRight size={18} /></Button>
+        <Button onClick={() => { setActiveTab('assets'); window.dispatchEvent(new Event('close-tour')); }} className="tour-start-btn shadow-lg hover:scale-105 transition-transform">Commencer maintenant <ArrowRight size={18} /></Button>
       </div>
     );
   }
@@ -2456,8 +2457,8 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                   <List size={14} />
                 </button>
                 <button 
-                  onClick={() => setTxViewMode('calendar')} 
-                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => { setTxViewMode('calendar'); window.dispatchEvent(new Event('close-tour')); }} 
+                  className={`tour-calendar-btn p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Vue Calendrier"
                 >
                   <CalendarDays size={14} />
@@ -2636,6 +2637,12 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
     // Réinitialisation du formulaire
     setNewAsset({ name: '', institution: '', value: '', type: 'liquidite' });
     setIsFormOpen(false);
+
+    // Clôture le tutoriel du formulaire et lance celui de l'œil si c'est le premier compte
+    window.dispatchEvent(new Event('close-tour'));
+    if (!assets || assets.length === 0) {
+      setTimeout(() => window.dispatchEvent(new Event('tour-asset-created')), 500);
+    }
   };
 
   const handleDelete = (id) => {
@@ -2672,43 +2679,61 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
     <div className="space-y-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={() => { handleDelete(assetToDelete); setAssetToDelete(null); }} message="Supprimer ce compte ?" />
       {selectedAsset && (<AssetDetailOverlay key={selectedAsset.id} asset={selectedAsset} onClose={() => setSelectedAsset(null)} onUpdate={handleUpdateAsset} transactions={transactions} />)}
-      {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => setIsFormOpen(true)} icon={Wallet} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => setIsFormOpen(!isFormOpen)} variant={isFormOpen ? "secondary" : "primary"} className="transition-all duration-300 min-w-[120px]">{isFormOpen ? <><X size={20} /> Annuler</> : <><PlusCircle size={20} /> Ajouter</>}</Button></div>)}
+      {(!assets || assets.length === 0) ? (<EmptyState title="Aucun actif" description="Ajoutez votre premier compte." actionLabel="Ajouter" onAction={() => { setIsFormOpen(true); window.dispatchEvent(new Event('close-tour')); setTimeout(() => window.dispatchEvent(new Event('tour-asset-form-open')), 500); }} icon={Wallet} actionClassName={!isFormOpen ? "tour-add-asset" : ""} />) : (<div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Mes Actifs</h2><Button onClick={() => { setIsFormOpen(!isFormOpen); if(!isFormOpen) { window.dispatchEvent(new Event('close-tour')); setTimeout(() => window.dispatchEvent(new Event('tour-asset-form-open')), 500); } }} variant={isFormOpen ? "secondary" : "primary"} className={`${!isFormOpen ? 'tour-add-asset' : ''} transition-all duration-300 min-w-[120px]`}>{isFormOpen ? <><X size={20} /> Annuler</> : <><PlusCircle size={20} /> Ajouter</>}</Button></div>)}
       {isFormOpen && (
         <Card className="bg-blue-50 border-blue-100 animate-in slide-in-from-top-4 fade-in duration-300 origin-top">
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" autoFocus className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="w-full">Ajouter</Button></form>
+          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end"><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><select className="tour-asset-form-type w-full p-2 rounded-lg border border-slate-300" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value})}>{Object.keys(CATEGORY_LABELS).map(key => (<option key={key} value={key}>{CATEGORY_LABELS[key]}</option>))}</select></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Nom</label><input type="text" autoFocus className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} /></div><div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Banque</label><input type="text" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.institution} onChange={(e) => setNewAsset({...newAsset, institution: e.target.value})} /></div>{isCompositeType(newAsset.type) ? <div className="lg:col-span-1 pb-2 text-center text-xs text-slate-500 italic">Valeur auto</div> : <div className="lg:col-span-1"><label className="block text-xs font-semibold text-slate-600 mb-1">Valeur</label><input type="number" className="w-full p-2 rounded-lg border border-slate-300" value={newAsset.value} onChange={(e) => setNewAsset({...newAsset, value: e.target.value})} /></div>}<Button type="submit" className="tour-asset-form-submit w-full">Ajouter</Button></form>
         </Card>
       )}
       <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{formatCurrency(groupedAssets[type].reduce((sum, a) => sum + a.value, 0))}</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
         <div 
-          key={asset.id} 
-          className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
-          onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
-        >
-          <div className="flex items-center gap-4 overflow-hidden min-w-0">
-            <div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0">
-              {(() => {
-                const IconComponent = (ASSET_ICON_OPTIONS[asset.icon] || ASSET_ICON_OPTIONS['building']).icon;
-                return <IconComponent size={20} />;
-              })()}
-            </div>
-            <div className="min-w-0 truncate">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <p className="font-semibold text-slate-800 truncate">{asset.name}</p>
-                {asset.isPrimary && (
-                  <div className="text-amber-400 shrink-0" title="Compte principal">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              key={asset.id} 
+              className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
+              onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
+            >
+              <div className="flex items-center gap-4 overflow-hidden min-w-0">
+                <div className="bg-slate-100 p-2 rounded-lg text-slate-500 flex-shrink-0">
+                  {(() => {
+                    const IconComponent = (ASSET_ICON_OPTIONS[asset.icon] || ASSET_ICON_OPTIONS['building']).icon;
+                    return <IconComponent size={20} />;
+                  })()}
+                </div>
+                <div className="min-w-0 truncate">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="font-semibold text-slate-800 truncate">{asset.name}</p>
+                    {asset.isPrimary && (
+                      <div className="text-amber-400 shrink-0" title="Compte principal">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <p className="text-sm text-slate-500 truncate">{asset.institution}</p>
+                </div>
               </div>
-              <p className="text-sm text-slate-500 truncate">{asset.institution}</p>
+              <div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{formatCurrency(asset.value)}</span>
+              <div className={`tour-asset-row-actions ${focusedAssetId === asset.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setSelectedAsset(asset); 
+                    window.dispatchEvent(new Event('tour-asset-detail')); 
+                    window.dispatchEvent(new Event('close-tour'));
+                  }} 
+                  className="tour-asset-eye bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <Eye size={18} />
+                </button>
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setAssetToDelete(asset.id); 
+                  }} 
+                  className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div></div>
             </div>
-          </div>
-          <div className="flex items-center gap-4 flex-shrink-0"><span className="font-bold text-slate-700">{formatCurrency(asset.value)}</span>
-          {/* Modif ici: utilisation de focusedAssetId pour mobile et group-hover pour desktop */}
-          <div className={`${focusedAssetId === asset.id ? 'flex' : 'hidden md:group-hover:flex'} gap-1 transition-all`}>
-            <button onClick={() => setSelectedAsset(asset)} className="bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"><Eye size={18} /></button><button onClick={() => setAssetToDelete(asset.id)} className="bg-red-50 text-red-600 p-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={18} /></button>
-          </div></div>
-        </div>
       ))}</div></Card>))}</div>
     </div>
   );
@@ -2902,8 +2927,8 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-right duration-300 text-slate-900 pb-24 md:pb-8">
       <div className="lg:col-span-1 space-y-6">
-        <Card className="bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
-        <Card className="sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
+        <Card className="tour-ai-input bg-slate-50/50 border-indigo-200"><h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600" /> Saisie Rapide IA</h3><p className="text-xs text-indigo-700 mb-3">Ex: "Virement de 100€ du Livret A vers Compte Courant hier" ou "McDo 15€"</p><div className="flex gap-2"><input type="text" className="flex-1 p-2 text-sm rounded-lg border border-indigo-200" value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiParse()} /><button onClick={handleAiParse} disabled={isAiProcessing || !aiInput} className="bg-indigo-600 text-white p-2 rounded-lg">{isAiProcessing ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}</button></div></Card>
+        <Card className="tour-budget-manual-form sticky top-6 bg-slate-50/50 border-slate-200"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">{editId ? <Edit size={20} className="text-blue-600"/> : <PlusCircle size={20} />} {editId ? "Modifier l'opération" : "Nouvelle Opération"}</h3><form onSubmit={handleAdd} className="space-y-4"><div><label className="block text-xs font-semibold text-slate-600 mb-1">Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewTrans({...newTrans, type: 'expense'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'expense' ? 'bg-red-100 text-red-700' : 'bg-white border border-slate-200'}`}>Dépense</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'income'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-white border border-slate-200'}`}>Revenu</button><button type="button" onClick={() => setNewTrans({...newTrans, type: 'transfer'})} className={`py-2 rounded-lg text-xs font-medium ${newTrans.type === 'transfer' ? 'bg-blue-100 text-blue-700' : 'bg-white border border-slate-200'}`}>Virement</button></div></div>
         
         <div><label className="block text-xs font-semibold text-slate-600 mb-1">{newTrans.type === 'transfer' ? "Compte Débité (Source)" : "Compte (Optionnel)"}</label><select className="w-full p-2 rounded-lg border border-slate-300" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}><option value="">-- Aucun --</option>{selectableAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         
@@ -2939,7 +2964,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
       <div className="lg:col-span-2 space-y-6">
         <ConfirmationModal isOpen={!!transactionToDelete} onClose={() => setTransactionToDelete(null)} onConfirm={() => { onDeleteTransaction(transactionToDelete); setTransactionToDelete(null); }} message="Supprimer cette opération ?" />
         
-        <Card className="relative border-slate-200">
+        <Card className="tour-budget-chart relative border-slate-200">
           <div className="mb-6">
             {/* En-tête : Empilé sur mobile, aligné sur desktop */}
             <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><ArrowRightLeft size={20} className="text-purple-600"/> Revenus & Dépenses</h3>
@@ -2961,7 +2986,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
             />
         </Card>
 
-        <Card className="flex flex-col relative border-slate-300">
+        <Card className="tour-budget-list flex flex-col relative border-slate-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 shrink-0">
             <div className="flex items-center gap-2 flex-1">
               <List size={20} className="text-blue-600 shrink-0"/> 
@@ -2981,8 +3006,8 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                   <List size={14} />
                 </button>
                 <button 
-                  onClick={() => setTxViewMode('calendar')} 
-                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => { setTxViewMode('calendar'); window.dispatchEvent(new Event('close-tour')); }} 
+                  className={`tour-calendar-btn p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
                   title="Vue Calendrier"
                 >
                   <CalendarDays size={14} />
@@ -3262,7 +3287,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
     <div className="flex flex-col lg:flex-row gap-3 lg:gap-6 h-[calc(100vh-190px)] md:h-[calc(100vh-140px)] animate-in fade-in w-full">
       {/* Sidebar - Actions Rapides (Scroll horizontal sur mobile) */}
       <div className="w-full lg:w-1/4 flex-shrink-0 flex flex-col gap-4">
-        <div className="bg-indigo-50 border border-indigo-100 p-3 md:p-4 rounded-xl shadow-sm">
+        <div className="tour-ai-flash bg-indigo-50 border border-indigo-100 p-3 md:p-4 rounded-xl shadow-sm">
           <div className="flex items-center gap-2 mb-2 md:mb-4 text-indigo-800 font-bold">
             <Sparkles size={16} md:size={18} />
             <span className="text-sm md:text-base">Analyses Flash</span>
@@ -3349,7 +3374,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
             <button 
               type="button" 
               onClick={() => fileInputRef.current.click()}
-              className="shrink-0 p-3 text-slate-500 hover:text-indigo-600 bg-slate-50 rounded-xl border border-slate-200 transition-all"
+              className="tour-ai-upload shrink-0 p-3 text-slate-500 hover:text-indigo-600 bg-slate-50 rounded-xl border border-slate-200 transition-all"
             >
               <Cloud size={20} />
             </button>
@@ -3358,7 +3383,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
               value={input} 
               onChange={(e) => setInput(e.target.value)} 
               placeholder="Posez une question..."
-              className="flex-1 min-w-0 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm md:text-base"
+              className="tour-ai-chat-input flex-1 min-w-0 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm md:text-base"
               disabled={isLoading} 
             />
             <Button variant="magic" disabled={isLoading || (!input.trim() && !selectedImage)} type="submit" className="shrink-0 px-3 py-3 md:px-4 flex items-center justify-center">
@@ -3565,10 +3590,83 @@ const LoginScreen = ({ onLogin, onEmailLogin, onEmailRegister, onGoogleLogin, on
   );
 };
 
+const CustomTooltip = ({ continuous, index, step, backProps, closeProps, primaryProps, tooltipProps, isLastStep }) => (
+  <div {...tooltipProps} className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-5 sm:p-6 w-[90vw] sm:w-full max-w-sm animate-in zoom-in-95 duration-200 relative">
+    <div className="flex items-center gap-3 mb-3">
+      {step.icon || <Info size={24} className="text-blue-600" />}
+      <h3 className="text-lg font-bold text-slate-800">{step.title}</h3>
+    </div>
+    <p className="text-sm text-slate-600 mb-6 leading-relaxed">{step.content}</p>
+    
+    {/* On masque le footer si l'étape force l'utilisateur à cliquer sur un élément de l'interface */}
+    {!step.hideFooter && (
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-bold text-slate-400">Étape {index + 1}</span>
+        <div className="flex gap-2">
+          {index > 0 && <Button variant="secondary" className="text-xs px-3 py-1.5 h-auto" {...backProps}>Retour</Button>}
+          {continuous && <Button variant="primary" className="text-xs px-3 py-1.5 h-auto" {...primaryProps}>{isLastStep ? 'Terminer' : 'Suivant'}</Button>}
+        </div>
+      </div>
+    )}
+    <button {...closeProps} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
+  </div>
+);
+
+// On éclate le tutoriel en plusieurs petites séquences contextuelles
+const TOURS = {
+  intro: [
+    { target: 'body', placement: 'center', title: 'Bienvenue sur MyWealth ! 🎉', content: "Faisons le tour du propriétaire pour bien démarrer. Pas d'inquiétude, vous serez libre d'explorer ensuite !", disableBeacon: true, icon: <TrendingUp size={24} className="text-blue-600" /> },
+    { target: '.tour-tab-dashboard', placement: 'bottom', title: '1. Le Tableau de bord', content: "C'est votre centre de contrôle. Il résumera votre patrimoine global une fois vos comptes ajoutés.", disableBeacon: true },
+    { target: '.tour-tab-assets', placement: 'bottom', title: '2. Les Actifs', content: "C'est ici que vous pourrez ajouter et gérer vos comptes (Banque, Bourse...).", disableBeacon: true },
+    { target: '.tour-tab-budget', placement: 'bottom', title: '3. Le Budget', content: "L'onglet pour suivre vos revenus et dépenses mois par mois.", disableBeacon: true },
+    { target: '.tour-tab-advisor', placement: 'bottom', title: '4. Le Conseiller IA', content: "Votre assistant personnel pour optimiser vos finances en un clic.", disableBeacon: true },
+    { target: '.tour-profile', placement: 'bottom-end', title: 'Votre Profil', content: "Plus tard, pensez à configurer vos objectifs ici pour obtenir des conseils sur-mesure !", disableBeacon: true, icon: <User size={24} className="text-indigo-600"/> },
+    { target: '.tour-start-btn', placement: 'bottom', title: 'Passons à la pratique !', content: "Nous allons maintenant ajouter votre premier compte. Cliquez sur ce bouton pour commencer.", disableBeacon: true, spotlightClicks: true, hideFooter: true, icon: <Wallet size={24} className="text-blue-600"/> }
+  ],
+  assets_add: [
+    { target: '.tour-add-asset', placement: 'bottom', title: 'À vous de jouer !', content: "Créez votre premier compte. Cliquez directement sur ce bouton pour ouvrir le formulaire.", disableBeacon: true, spotlightClicks: true, hideFooter: true, icon: <PlusCircle size={24} className="text-emerald-500"/> }
+  ],
+  assets_form: [
+    { target: '.tour-asset-form-type', placement: 'bottom', title: 'Le type de compte', content: "Choisissez 'Liquidités' pour vos livrets ou comptes courants. Pour la Bourse ou l'Immobilier, l'application calculera automatiquement vos plus-values !", disableBeacon: true },
+    { target: '.tour-asset-form-submit', placement: 'top', title: 'Validez la création', content: "Renseignez un nom, une banque et une valeur de départ, puis cliquez ici pour l'ajouter.", disableBeacon: true}
+  ],
+  assets_eye: [
+    { target: '.tour-asset-eye', placement: 'left', title: 'Voir le détail', content: "Votre compte est créé ! Cliquez sur cet œil pour découvrir comment modifier ses informations ou gérer ses lignes.", disableBeacon: true, spotlightClicks: true, hideFooter: true, icon: <Eye size={24} className="text-blue-500"/> }
+  ],
+  detail: [
+    { target: '.tour-asset-name', placement: 'bottom-start', title: 'Modifiez à la volée', content: "Cliquez directement sur le nom ou la banque pour les renommer. C'est magique !", disableBeacon: true, icon: <Edit size={24} className="text-purple-600"/> },
+    { target: '.tour-asset-primary', placement: 'bottom', title: 'Compte Principal', content: "Cliquez sur cette étoile pour définir ce compte par défaut lors de vos saisies rapides de dépenses.", disableBeacon: true },
+    { target: '.tour-asset-value', placement: 'left', title: 'Valorisation Actuelle', content: "Voici le solde total de votre compte en temps réel.", disableBeacon: true, icon: <DollarSign size={24} className="text-emerald-500"/> },
+    { target: '.tour-asset-chart', placement: 'bottom', title: 'Évolution du solde', content: "Suivez visuellement la courbe de croissance de votre actif au fil du temps.", disableBeacon: true, icon: <TrendingUp size={24} className="text-indigo-500"/> },
+    { target: '.tour-asset-update', placement: 'right', title: 'Mise à jour & Historique', content: "Actualisez votre solde en un clic, ou ajoutez un point dans le passé pour recréer l'historique oublié.", disableBeacon: true, icon: <History size={24} className="text-blue-500"/> },
+    { target: '.tour-asset-history', placement: 'top', title: 'Historique Global', content: "Retrouvez ici toutes les transactions et variations de solde de ce compte.", disableBeacon: true, icon: <List size={24} className="text-slate-600"/> },
+    { target: '.tour-asset-ai-tab', placement: 'bottom', title: 'Analyse IA ✨', content: "Basculez sur cet onglet pour obtenir une analyse poussée et des conseils personnalisés sur ce compte précis.", disableBeacon: true, icon: <Sparkles size={24} className="text-amber-500"/> }
+  ],
+  budget: [
+    { target: 'body', placement: 'center', title: 'Votre Budget & Flux 💸', content: "Bienvenue dans le centre névralgique de vos finances. C'est ici que vous allez suivre l'évolution de chaque euro gagné ou dépensé.", disableBeacon: true, icon: <ArrowRightLeft size={24} className="text-blue-600"/> },
+    { target: '.tour-budget-manual-form', placement: 'right', title: 'Saisie Manuelle', content: "Ajoutez vos dépenses, revenus ou virements entre comptes en remplissant ce formulaire classique.", disableBeacon: true, icon: <PlusCircle size={24} className="text-emerald-500"/> },
+    { target: '.tour-ai-input', placement: 'bottom', title: 'La Saisie Magique IA 🪄', content: "Encore plus rapide : écrivez simplement 'Courses 50€' ou 'Virement 100€' et l'IA s'occupe de remplir le formulaire pour vous !", disableBeacon: true, icon: <Wand2 size={24} className="text-indigo-600"/> },
+    { target: '.tour-budget-chart', placement: 'left', title: 'Analyse Visuelle', content: "Suivez l'évolution de vos flux. Astuce : cliquez sur une barre rouge pour voir la répartition détaillée de vos dépenses du mois !", disableBeacon: true, icon: <PieIcon size={24} className="text-purple-500"/> },
+    { target: '.tour-budget-list', placement: 'left', title: 'Le Journal', content: "Retrouvez ici tout l'historique de vos opérations avec la possibilité de rechercher, filtrer ou modifier une ligne.", disableBeacon: true, icon: <List size={24} className="text-slate-600"/> },
+    { target: '.tour-calendar-btn', placement: 'left', title: 'La Vue Calendrier 📅', content: "Basculez sur cette vue pour visualiser vos mouvements jour par jour sur un mois entier. Cliquez dessus pour essayer et terminer !", disableBeacon: true, spotlightClicks: true, hideFooter: true, icon: <CalendarDays size={24} className="text-blue-500"/> }
+  ],
+  advisor: [
+    { target: 'body', placement: 'center', title: 'Votre Conseiller Personnel', content: "L'IA a connaissance de l'intégralité de votre patrimoine, de vos revenus et de vos objectifs. Elle est là pour vous guider sur mesure.", disableBeacon: true, icon: <Bot size={24} className="text-indigo-600"/> },
+    { target: '.tour-ai-flash', placement: 'right', title: 'Analyses Flash', content: "Pas d'inspiration ? Cliquez sur l'un de ces boutons pour lancer une analyse financière complète en un clin d'œil.", disableBeacon: true, icon: <Zap size={24} className="text-amber-500"/> },
+    { target: '.tour-ai-upload', placement: 'top-start', title: 'Analyse de Documents', content: "La vraie magie est ici : envoyez un relevé bancaire, une fiche de paie ou un document SCPI (PDF/Image) pour que l'IA le décrypte pour vous !", disableBeacon: true, icon: <Cloud size={24} className="text-blue-500"/> },
+    { target: '.tour-ai-chat-input', placement: 'top', title: 'À vous de jouer !', content: "Posez votre première question. Par exemple : 'Comment investir 500€ ce mois-ci ?'. C'est à vous !", disableBeacon: true, icon: <MessageSquare size={24} className="text-indigo-600"/> }
+  ]
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [assets, setAssets] = useState(null);
+  const [transactions, setTransactions] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [toast, setToast] = useState(null);
   
   // Remonte en haut de la page automatiquement à chaque changement d'onglet
   useEffect(() => {
@@ -3587,15 +3685,111 @@ export default function App() {
       localStorage.setItem(`myWealth_chat_${user.uid}`, JSON.stringify(chatMessages));
     }
   }, [chatMessages, user]);
-  const [assets, setAssets] = useState(null);
-  const [transactions, setTransactions] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  
-  
-// Message envoie auto mail
-const [toast, setToast] = useState(null); 
 
+  // --- LOGIQUE ONBOARDING CONTEXTUEL (BASE DE DONNÉES) ---
+  const [tourState, setTourState] = useState({ run: false, steps: [], stepIndex: 0, key: '' });
+
+  const startTour = useCallback((tourKey) => {
+    if (!user || !userProfile) return;
+    
+    const completedTours = userProfile.completedTours || [];
+    
+    if (!completedTours.includes(tourKey)) {
+      setTimeout(() => {
+        const isMobile = window.innerWidth < 768;
+        const responsiveSteps = TOURS[tourKey].map(step => {
+          let newTarget = step.target;
+          if (newTarget.startsWith('.tour-tab-')) {
+             newTarget = `.tour-tab-${isMobile ? 'mobile' : 'desktop'}-${newTarget.replace('.tour-tab-', '')}`;
+          } else if (newTarget === '.tour-profile') {
+             newTarget = `.tour-profile-${isMobile ? 'mobile' : 'desktop'}`;
+          }
+          return { ...step, target: newTarget };
+        });
+        
+        setTourState({ run: true, steps: responsiveSteps, stepIndex: 0, key: tourKey });
+      }, 800);
+    }
+  }, [user, userProfile]);
+
+  // Déclencheurs basés sur la navigation de l'utilisateur
+  useEffect(() => {
+    if (!user || loading || !userProfile) return;
+    if (activeTab === 'dashboard') startTour('intro');
+    else if (activeTab === 'assets' && assets && assets.length === 0) startTour('assets_add');
+    else if (activeTab === 'budget') startTour('budget');
+    else if (activeTab === 'advisor') startTour('advisor');
+  }, [activeTab, user, loading, assets, userProfile, startTour]);
+
+  // Déclencheurs et fermetures via Événements Custom
+  useEffect(() => {
+    const handleDetailOpen = () => startTour('detail');
+    const handleFormOpen = () => startTour('assets_form');
+    const handleAssetCreated = () => startTour('assets_eye');
+    
+    // NOUVEAU : Récepteur pour forcer la fermeture d'un tutoriel validé par l'action
+    const handleCloseTour = () => {
+      setTourState(prev => {
+        // Sauvegarde silencieuse en base de données si le tour était actif
+        if (prev.run && prev.key && user && userProfile) {
+          const completedTours = userProfile.completedTours || [];
+          if (!completedTours.includes(prev.key)) {
+            const newCompleted = [...completedTours, prev.key];
+            setUserProfile(p => ({ ...p, completedTours: newCompleted }));
+            const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+            setDoc(profileRef, { completedTours: newCompleted }, { merge: true }).catch(console.error);
+          }
+        }
+        // Force l'arrêt de Joyride
+        return { ...prev, run: false };
+      });
+    };
+
+    window.addEventListener('tour-asset-detail', handleDetailOpen);
+    window.addEventListener('tour-asset-form-open', handleFormOpen);
+    window.addEventListener('tour-asset-created', handleAssetCreated);
+    window.addEventListener('close-tour', handleCloseTour);
+    return () => {
+      window.removeEventListener('tour-asset-detail', handleDetailOpen);
+      window.removeEventListener('tour-asset-form-open', handleFormOpen);
+      window.removeEventListener('tour-asset-created', handleAssetCreated);
+      window.removeEventListener('close-tour', handleCloseTour);
+    };
+  }, [startTour, user, userProfile]);
+
+  // Fonction asynchrone pour sauvegarder en base
+  const handleJoyrideCallback = async (data) => {
+    const { action, index, status, type } = data;
+    
+    // Ajout de "action === 'close'" pour intercepter le clic sur la croix
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status) || type === 'target:notFound' || action === 'close') {
+      setTourState(prev => ({ ...prev, run: false }));
+      
+      if (user && userProfile && tourState.key) {
+        const completedTours = userProfile.completedTours || [];
+        
+        // Si ce tutoriel n'est pas encore marqué comme terminé
+        if (!completedTours.includes(tourState.key)) {
+          const newCompleted = [...completedTours, tourState.key];
+          
+          // 1. Mise à jour immédiate de l'état local (pour éviter qu'il ne se relance à la seconde)
+          setUserProfile(prev => ({ ...prev, completedTours: newCompleted }));
+          
+          // 2. Sauvegarde silencieuse dans Firestore
+          try {
+            const profileRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
+            await setDoc(profileRef, { completedTours: newCompleted }, { merge: true });
+          } catch (error) {
+            console.error("Erreur lors de la sauvegarde du tutoriel en base :", error);
+          }
+        }
+      }
+    } else if (type === 'step:after') {
+      setTourState(prev => ({ ...prev, stepIndex: index + (action === 'prev' ? -1 : 1) }));
+    }
+  };
+
+// Message envoie auto mail
 const showToast = (msg) => setToast({ message: msg });
 
 
@@ -4171,8 +4365,66 @@ const showToast = (msg) => setToast({ message: msg });
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 md:pb-0">
+    <div className={`min-h-screen bg-slate-100 text-slate-900 font-sans pb-20 md:pb-0 ${tourState.run ? `tour-${tourState.key}-step-${tourState.stepIndex}` : ''}`}>
+      <Joyride
+        steps={tourState.steps}
+        run={tourState.run}
+        stepIndex={tourState.stepIndex}
+        continuous={true}
+        showSkipButton={true}
+        callback={handleJoyrideCallback}
+        tooltipComponent={CustomTooltip}
+        disableOverlayClose={true}
+        disableScrolling={true}
+        spotlightPadding={8}
+        floaterProps={{ 
+          disableAnimation: true,
+          preventOverflow: { boundariesElement: 'window' }
+        }}
+        styles={{
+          options: {
+            zIndex: 10000,
+            overlayColor: 'rgba(15, 23, 42, 0.75)', /* Voile adouci pour laisser deviner l'application derrière */
+          },
+          spotlight: {
+            backgroundColor: 'rgba(255, 255, 255, 0.3)', /* Effet "lampe torche" pour illuminer l'élément assombri par le navigateur */
+            border: '2px solid rgba(255, 255, 255, 0.9)', /* Bordure blanche physique */
+            borderRadius: '16px',
+            boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)' /* Lueur bleue intense tout autour */
+          }
+        }}
+      />
       <style>{`
+        /* Animation lumineuse (Glow) renforcée pour forcer l'affichage */
+        @keyframes pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 1); }
+          70% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+        .tour-intro-step-6 .tour-start-btn,
+        .tour-assets_add-step-0 .tour-add-asset,
+        .tour-assets_form-step-1 .tour-asset-form-submit,
+        .tour-assets_eye-step-0 .tour-asset-eye,
+        .tour-budget-step-5 .tour-calendar-btn {
+          animation: pulse-ring 1.5s cubic-bezier(0.2, 0, 0.2, 1) infinite !important;
+          /* Protection extrême contre l'assombrissement forcé (ex: Samsung Internet) */
+          background-color: #2563eb !important; 
+          color: #ffffff !important;
+          color-scheme: light only !important; /* Interdit au navigateur d'appliquer son mode sombre ici */
+          -webkit-filter: none !important;
+          filter: none !important;
+          position: relative !important;
+          z-index: 10001 !important;
+        }
+
+        /* Force l'affichage de la barre d'action (Oeil) pendant l'étape correspondante */
+        .tour-assets_eye-step-0 .tour-asset-row-actions {
+          display: flex !important;
+        }
+          outline: 2px solid #93c5fd !important;
+          outline-offset: 2px;
+        }
+
         /* Barre de défilement personnalisée pour toute l'app */
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
@@ -4238,7 +4490,7 @@ const showToast = (msg) => setToast({ message: msg });
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`tour-tab-desktop-${tab.id} flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : tab.magic ? 'text-indigo-600 hover:bg-indigo-50' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <tab.icon size={16} className={tab.magic ? "text-indigo-500" : ""} />
                 <span>{tab.label}</span>
@@ -4247,7 +4499,7 @@ const showToast = (msg) => setToast({ message: msg });
           </div>
           <div className="flex items-center gap-3">
             {userProfile ? (
-              <button onClick={() => setIsProfileModalOpen(true)} className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
+              <button onClick={() => setIsProfileModalOpen(true)} className="tour-profile-desktop flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full font-medium border border-slate-200 hover:bg-slate-100 transition-colors">
                 <User size={12} className="text-blue-500" /> {userProfile.firstName}
               </button>
             ) : (
@@ -4266,7 +4518,7 @@ const showToast = (msg) => setToast({ message: msg });
         </div>
         <div className="flex items-center gap-2">
           {userProfile && (
-            <button onClick={() => setIsProfileModalOpen(true)} className="p-2 bg-slate-50 rounded-full text-blue-600">
+            <button onClick={() => setIsProfileModalOpen(true)} className="tour-profile-mobile p-2 bg-slate-50 rounded-full text-blue-600">
               <User size={18} />
             </button>
           )}
@@ -4309,7 +4561,7 @@ const showToast = (msg) => setToast({ message: msg });
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
+              className={`tour-tab-mobile-${tab.id} flex flex-col items-center justify-center w-full h-full space-y-1 ${activeTab === tab.id ? 'text-blue-600' : 'text-slate-400'}`}
             >
               <tab.icon size={20} className={activeTab === tab.id ? (tab.magic ? "text-indigo-500" : "text-blue-600") : ""} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
               <span className="text-[10px] font-medium">{tab.label}</span>
