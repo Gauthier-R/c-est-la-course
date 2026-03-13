@@ -14,7 +14,7 @@ import {
   Globe, PiggyBank, Wand2, Calculator, Info, AlertTriangle, Clock,
   Utensils, Home, Car, Gamepad2, Heart, ShoppingBag, Zap, Briefcase,
   CheckCircle, LogIn, UserPlus, KeyRound, Target, Scale, Menu,
-  BarChart2, LineChart as LineChartIcon
+  BarChart2, LineChart as LineChartIcon, CalendarDays, ChevronRight
 } from 'lucide-react';
 
 import emailjs from '@emailjs/browser';
@@ -1969,6 +1969,83 @@ return (
 );
 };
 
+const TransactionCalendar = ({ transactions, filterMonth, onDayClick }) => {
+  const [displayDate, setDisplayDate] = useState(new Date());
+
+  // Aligne le calendrier si un mois est cliqué sur le graphique
+  useEffect(() => {
+    if (filterMonth) {
+      const [year, month] = filterMonth.split('-');
+      setDisplayDate(new Date(year, month - 1, 1));
+    } else {
+      setDisplayDate(new Date());
+    }
+  }, [filterMonth]);
+
+  const year = displayDate.getFullYear();
+  const month = displayDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  // Ajustement pour démarrer la semaine le Lundi (au lieu de Dimanche en JS)
+  const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+  // Calcul des totaux par jour
+  const dailyData = {};
+  transactions.forEach(t => {
+     const tDate = new Date(t.date);
+     if (tDate.getFullYear() === year && tDate.getMonth() === month) {
+        const day = tDate.getDate();
+        if (!dailyData[day]) dailyData[day] = { income: 0, expense: 0 };
+        if (t.type === 'income') dailyData[day].income += t.amount;
+        if (t.type === 'expense') dailyData[day].expense += t.amount;
+     }
+  });
+
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: startOffset }, (_, i) => i);
+  const monthName = displayDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="p-2 sm:p-4 bg-slate-50/50 rounded-xl h-full flex flex-col animate-in fade-in duration-300">
+      <div className="flex justify-between items-center mb-4 px-2">
+         <h4 className="font-bold text-slate-700 capitalize text-lg">{monthName}</h4>
+         {/* Navigation permise seulement si aucun mois n'est imposé par le graphique */}
+         {!filterMonth && (
+           <div className="flex gap-2">
+             <button onClick={() => setDisplayDate(new Date(year, month - 1, 1))} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition-colors"><ChevronLeft size={18}/></button>
+             <button onClick={() => setDisplayDate(new Date(year, month + 1, 1))} className="p-1.5 hover:bg-slate-200 text-slate-500 rounded-lg transition-colors"><ChevronRight size={18}/></button>
+           </div>
+         )}
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+        {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d} className="text-[10px] md:text-xs font-bold text-slate-400 uppercase">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1 md:gap-2 auto-rows-[minmax(50px,_1fr)] md:auto-rows-[minmax(70px,_1fr)]">
+         {blanks.map(b => <div key={`blank-${b}`} className="bg-transparent rounded-lg" />)}
+         {daysArray.map(day => {
+            const data = dailyData[day];
+            const isToday = new Date().getDate() === day && new Date().getMonth() === month && new Date().getFullYear() === year;
+            const hasData = data?.income > 0 || data?.expense > 0;
+            const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            return (
+              <div 
+                key={day} 
+                onClick={() => onDayClick && onDayClick(formattedDate)}
+                className={`relative flex flex-col items-center p-1 md:p-2 rounded-lg border shadow-sm cursor-pointer ${isToday ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-slate-100 hover:border-blue-300'} transition-colors`}
+              >
+                 <span className={`text-xs md:text-sm font-semibold ${isToday ? 'text-blue-700' : hasData ? 'text-slate-900' : 'text-slate-400'}`}>{day}</span>
+                 <div className="flex flex-col items-center mt-auto w-full px-0.5 space-y-0.5">
+                   {data?.income > 0 && <span className="text-[9px] md:text-[10px] font-bold text-green-600 leading-none truncate w-full text-center">+{Math.round(data.income)}€</span>}
+                   {data?.expense > 0 && <span className="text-[9px] md:text-[10px] font-bold text-red-500 leading-none truncate w-full text-center">-{Math.round(data.expense)}€</span>}
+                 </div>
+              </div>
+            )
+         })}
+      </div>
+    </div>
+  )
+};
+
 const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction, userProfile }) => {
   const [timeRange, setTimeRange] = useState('6M');
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -1988,6 +2065,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(20); // État pour la pagination
+  const [txViewMode, setTxViewMode] = useState('list'); // 'list' ou 'calendar'
 
   // 1. Filtrage et Tri complet
   const allFilteredTransactions = useMemo(() => {
@@ -1995,7 +2073,11 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     if (filterMonth) result = result.filter(t => t.date.startsWith(filterMonth));
     if (filterCategory) result = result.filter(t => t.category === filterCategory);
     if (searchQuery) {
-      result = result.filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t => 
+        t.label.toLowerCase().includes(query) || 
+        t.date.includes(query)
+      );
     }
     result.sort((a, b) => b.date.localeCompare(a.date));
     return result;
@@ -2364,6 +2446,24 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                   Filtré
                 </span>
               )}
+              
+              <div className="ml-auto flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button 
+                  onClick={() => setTxViewMode('list')} 
+                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'list' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Vue Liste"
+                >
+                  <List size={14} />
+                </button>
+                <button 
+                  onClick={() => setTxViewMode('calendar')} 
+                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Vue Calendrier"
+                >
+                  <CalendarDays size={14} />
+                </button>
+              </div>
+
               <button 
                 onClick={() => { setIsSearchOpen(!isSearchOpen); if(isSearchOpen) setSearchQuery(''); }}
                 className={`ml-2 p-1.5 rounded-lg transition-all border ${isSearchOpen ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-blue-600'}`}
@@ -2383,7 +2483,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input 
                   type="text"
-                  placeholder="Rechercher une opération..."
+                  placeholder="Rechercher par nom ou date YYYY-MM-DD..."
                   className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -2393,9 +2493,20 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
             </div>
           )}
 
-          {/* Zone de liste défilante */}
+          {/* Zone de contenu défilante */}
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-            <div className="space-y-2">
+            {txViewMode === 'calendar' ? (
+              <TransactionCalendar 
+                transactions={allFilteredTransactions} 
+                filterMonth={filterMonth} 
+                onDayClick={(dateStr) => {
+                  setSearchQuery(dateStr);
+                  setIsSearchOpen(true);
+                  setTxViewMode('list');
+                }}
+              />
+            ) : (
+              <div className="space-y-2">
               {(!displayTransactions || displayTransactions.length === 0) ? (
                 <div className="p-10 text-center text-slate-400 italic text-sm">Aucune opération trouvée</div>
               ) : (
@@ -2463,6 +2574,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
                 </>
               )}
             </div>
+            )}
           </div>
         </Card>
       </div>
@@ -2612,13 +2724,18 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(20);
+  const [txViewMode, setTxViewMode] = useState('list'); // État ajouté ici
 
   const allFilteredTransactions = useMemo(() => {
     let result = [...(transactions || [])];
     if (filterMonth) result = result.filter(t => t.date.startsWith(filterMonth));
     if (filterCategory) result = result.filter(t => t.category === filterCategory);
     if (searchQuery) {
-      result = result.filter(t => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t => 
+        t.label.toLowerCase().includes(query) || 
+        t.date.includes(query)
+      );
     }
     result.sort((a, b) => b.date.localeCompare(a.date));
     return result;
@@ -2854,6 +2971,24 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                   Filtré
                 </span>
               )}
+              
+              <div className="ml-auto flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button 
+                  onClick={() => setTxViewMode('list')} 
+                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'list' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Vue Liste"
+                >
+                  <List size={14} />
+                </button>
+                <button 
+                  onClick={() => setTxViewMode('calendar')} 
+                  className={`p-1.5 rounded-md transition-all flex items-center justify-center ${txViewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Vue Calendrier"
+                >
+                  <CalendarDays size={14} />
+                </button>
+              </div>
+
               {/* Bouton Loupe */}
               <button 
                 onClick={() => { setIsSearchOpen(!isSearchOpen); if(isSearchOpen) setSearchQuery(''); }}
@@ -2871,7 +3006,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input 
                   type="text"
-                  placeholder="Rechercher par nom..."
+                  placeholder="Rechercher par nom ou date YYYY-MM-DD..."
                   className="w-full pl-9 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -2885,8 +3020,21 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
               </div>
             </div>
           )}
-          <div className="max-h-[400px] overflow-y-auto divide-y divide-slate-100 custom-scrollbar pr-2">
-            {displayTransactions.length === 0 ? (
+          
+          <div className="max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+            {txViewMode === 'calendar' ? (
+              <TransactionCalendar 
+                transactions={allFilteredTransactions} 
+                filterMonth={filterMonth} 
+                onDayClick={(dateStr) => {
+                  setSearchQuery(dateStr);
+                  setIsSearchOpen(true);
+                  setTxViewMode('list');
+                }}
+              />
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {displayTransactions.length === 0 ? (
               <div className="p-10 text-center text-slate-400 italic">
                 Aucune transaction pour les filtres sélectionnés.
               </div>
@@ -2958,6 +3106,8 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                   </div>
                 )}
               </>
+            )}
+            </div>
             )}
           </div>
         </Card>
