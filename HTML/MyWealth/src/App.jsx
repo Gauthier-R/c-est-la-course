@@ -860,6 +860,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
   const [focusedPosId, setFocusedPosId] = useState(null);
   const [movementConfig, setMovementConfig] = useState(null); 
   const [movementData, setMovementData] = useState({ positionId: '', amount: '' });
+  const [showPrimaryModal, setShowPrimaryModal] = useState(false);
 
   // Nouveaux états pour l'édition de l'en-tête (Nom, Icône, Banque, Type)
   const [isEditingName, setIsEditingName] = useState(false);
@@ -1368,13 +1369,51 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
 
 return (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
+    {/* Modale standard pour les suppressions */}
     <ConfirmationModal 
       isOpen={!!deleteConfig} 
       onClose={() => setDeleteConfig(null)} 
       onConfirm={executeDelete} 
     />
     
-    <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
+    {/* NOUVELLE Modale Bespoke pour le Compte Principal (Design Coordonné, pas de rouge) */}
+    {showPrimaryModal && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowPrimaryModal(false)}>
+        {/* On peut remettre un backdrop ici ou gérer z-index de la fenêtre de detail */}
+        <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"></div>
+        
+        <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200 flex flex-col items-center text-center relative z-10" onClick={e => e.stopPropagation()}>
+          
+          {/* Icône Appropriée : Grosse Étoile Amber */}
+          <div className="p-4 bg-amber-50 rounded-full text-amber-400 mb-6 shadow-inner border border-amber-100">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </div>
+
+          <h2 className="text-2xl font-bold text-slate-900 mb-3">Compte principal</h2>
+          <p className="text-sm text-slate-600 mb-8 leading-relaxed">Voulez-vous définir <span className="font-semibold text-slate-800">{asset.name}</span> comme compte principal de paiement ?<br/><br/>Il sera sélectionné par défaut lors de vos ajouts de dépenses rapides (Saisie IA).</p>
+          
+          <div className="flex gap-4 w-full">
+            <button 
+              onClick={() => setShowPrimaryModal(false)}
+              className="flex-1 py-3.5 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors"
+            >
+              Annuler
+            </button>
+            <button 
+              onClick={() => {
+                onUpdate({ ...asset, isPrimary: true });
+                setShowPrimaryModal(false);
+              }}
+              className="flex-1 py-3.5 px-6 rounded-2xl bg-amber-400 hover:bg-amber-500 text-white font-bold transition-colors shadow-sm"
+            >
+              Confirmer
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300 relative z-10">
       
       {/* --- VUE DÉTAIL DE L'ACTIF --- */}
       {viewMode === 'asset' && (
@@ -1434,13 +1473,29 @@ return (
                     className="text-xl md:text-2xl font-bold text-slate-800 bg-white border-b-2 border-blue-500 outline-none w-full max-w-[250px] px-1 bg-transparent"
                   />
                 ) : (
-                  <h2 
-                    onClick={() => setIsEditingName(true)}
-                    className="text-xl md:text-2xl font-bold text-slate-800 hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
-                    title="Modifier le nom"
-                  >
-                    {asset.name}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 
+                      onClick={() => setIsEditingName(true)}
+                      className="text-xl md:text-2xl font-bold text-slate-800 hover:text-blue-600 cursor-text transition-colors border-b-2 border-transparent hover:border-blue-200 border-dashed"
+                      title="Modifier le nom"
+                    >
+                      {asset.name}
+                    </h2>
+                    {/* ETOILE COMPTE PRINCIPAL */}
+                    <button 
+                      onClick={() => {
+                        if (asset.isPrimary) {
+                          onUpdate({ ...asset, isPrimary: false });
+                        } else {
+                          setShowPrimaryModal(true);
+                        }
+                      }}
+                      className={`p-1.5 rounded-full transition-all ${asset.isPrimary ? 'text-amber-400 bg-amber-50 hover:bg-amber-100 shadow-sm' : 'text-slate-300 hover:text-amber-400 hover:bg-slate-50'}`}
+                      title={asset.isPrimary ? "Compte principal" : "Définir comme compte principal"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={asset.isPrimary ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2489,7 +2544,14 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
         ];
       }
     }
-    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    
+    // NOUVEAU : Exclusivité du compte principal
+    let newAssets = [...assets];
+    if (updatedAsset.isPrimary) {
+       newAssets = newAssets.map(a => ({ ...a, isPrimary: false }));
+    }
+    
+    setAssets(newAssets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
     setSelectedAsset(updatedAsset);
   };
   const groupedAssets = useMemo(() => { const groups = {}; assets.forEach(asset => { if (!groups[asset.type]) groups[asset.type] = []; groups[asset.type].push(asset); }); return groups; }, [assets]);
@@ -2518,7 +2580,14 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
               })()}
             </div>
             <div className="min-w-0 truncate">
-              <p className="font-semibold text-slate-800 truncate">{asset.name}</p>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <p className="font-semibold text-slate-800 truncate">{asset.name}</p>
+                {asset.isPrimary && (
+                  <div className="text-amber-400 shrink-0" title="Compte principal">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                  </div>
+                )}
+              </div>
               <p className="text-sm text-slate-500 truncate">{asset.institution}</p>
             </div>
           </div>
@@ -2636,8 +2705,13 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     if (!aiInput) return;
     setIsAiProcessing(true);
     const accountNames = selectableAccounts.map(a => a.name).join(', ');
+    
+    // NOUVEAU : Identification du compte principal
+    const primaryAccount = selectableAccounts.find(a => a.isPrimary);
+    const primaryAccountInfo = primaryAccount ? `\n    - Compte principal par défaut : "${primaryAccount.name}". Si l'utilisateur ne précise AUCUN compte dans sa phrase, tu DOIS obligatoirement renvoyer "accountName": "${primaryAccount.name}".` : '';
+
     const userPrompt = `CONTEXTE :
-    - Comptes disponibles : ${accountNames}.
+    - Comptes disponibles : ${accountNames}.${primaryAccountInfo}
     - Catégories autorisées : ${Object.keys(EXPENSE_CATEGORIES).join(', ')}.
     - Date d'aujourd'hui : ${new Date().toLocaleDateString('fr-FR')}.
     - Analyse l'entrée utilisateur suivante : "${aiInput}"
@@ -2662,14 +2736,13 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     - "type" : 'expense', 'income' ou 'transfer'.
     - "category" : Selon le guide ci-dessus.
     - Si type='transfer' : extrais "accountFrom" et "accountTo".
-    - Si type='expense' ou 'income' : extrais "accountName".
+    - Si type='expense' ou 'income' : extrais "accountName" (utilise le compte par défaut si applicable).
 
     Réponds uniquement avec le JSON.
   `;
     try {
       const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
       
-      // Sécurité renforcée : on cherche si le texte contient bien une structure JSON { ... }
       const jsonMatch = resultText.match(/\{[\s\S]*\}/);
       
       if (!jsonMatch) {
@@ -2678,7 +2751,6 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
         return;
       }
 
-      // On parse uniquement la partie JSON trouvée
       const data = JSON.parse(jsonMatch[0]);
       setNewTrans({ 
         date: data.date || new Date().toISOString().split('T')[0], 
@@ -2701,6 +2773,9 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
         if (data.accountName) {
           const found = selectableAccounts.find(a => a.name.toLowerCase() === data.accountName.toLowerCase());
           if (found) setSelectedAccount(found.id);
+        } else if (primaryAccount) {
+          // Sécurité supplémentaire : Si l'IA n'a rien renvoyé, l'application force le compte principal
+          setSelectedAccount(primaryAccount.id);
         }
       }
       setAiInput('');
