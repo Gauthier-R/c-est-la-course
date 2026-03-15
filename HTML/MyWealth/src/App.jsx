@@ -316,6 +316,70 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // --- NOUVELLE LOGIQUE D'ANIMATION (Sans conflits) ---
+  const [isClosing, setIsClosing] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+  const [startY, setStartY] = useState(null);
+  const [currentY, setCurrentY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Déclenche l'animation fluide à l'ouverture
+  useEffect(() => {
+    if (isOpen) {
+      setIsOpening(true);
+      // Un très court délai permet au navigateur de placer la modale en bas (100vh) avant de l'animer vers sa place (0px)
+      const timer = setTimeout(() => setIsOpening(false), 10);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      setCurrentY(0);
+      onClose();
+    }, 300); // Doit correspondre à la durée de la transition CSS
+  }, [onClose]);
+
+  const handleTouchStart = (e) => {
+    if (isClosing) return;
+    setStartY(e.touches[0].clientY);
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!startY || isClosing) return;
+    const y = e.touches[0].clientY;
+    const diff = y - startY;
+    if (diff > 0) {
+      setCurrentY(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isClosing) return;
+    setIsDragging(false);
+    if (currentY > 100) { // Seuil pour déclencher la fermeture
+      handleClose();
+    } else {
+      setCurrentY(0); // Retour élastique fluide si on lâche trop tôt
+    }
+    setStartY(null);
+  };
+  // ------------------------------------------
+
+  // Blocage du scroll de l'arrière-plan quand la modale est ouverte
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    // Nettoyage de sécurité en cas de démontage soudain du composant
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen && userProfile) {
       setFormData({
@@ -374,15 +438,60 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
 
   if (!isOpen) return null;
 
+  // Animation du fond sombre
+  const overlayAnimation = isClosing ? "animate-out fade-out duration-300" : "animate-in fade-in duration-300";
+  
+  // On retire l'animation d'entrée de Tailwind pour l'axe Y pour éviter le conflit avec notre transformation manuelle
+  const modalAnimation = "md:animate-in md:zoom-in-95 duration-300";
+
+  // Logique de transformation 100% contrôlée (Ouverture, Drag, Fermeture)
+  let translateY = "0px";
+  if (isOpening || isClosing) {
+    translateY = "100vh"; // Départ (ouverture) ou Fin (fermeture) caché tout en bas
+  } else if (currentY > 0) {
+    translateY = `${currentY}px`; // Suivi du doigt
+  }
+
+  // Transition dynamique : on sépare les temps d'ouverture et de fermeture
+  let transitionStyle;
+  if (isDragging) {
+    transitionStyle = "none"; // Mouvement collé au doigt, sans latence
+  } else if (isClosing) {
+    // La fermeture reste à 0.3s (doit TOUJOURS correspondre au setTimeout(..., 300) de handleClose)
+    transitionStyle = "transform 0.4s ease-in, opacity 0.4s ease-out"; 
+  } else {
+    // L'ouverture est allongée à 0.6s avec une courbe d'accélération plus douce
+    transitionStyle = "transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.9s ease-out"; 
+  }
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200" onMouseDown={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto relative" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Mon Profil</h3>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full"><X size={20}/></button>
+    <div 
+      className={`fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm ${overlayAnimation}`} 
+      onMouseDown={handleClose}
+    >
+      <div 
+        className={`bg-white rounded-t-3xl md:rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto relative ${modalAnimation} ${isClosing ? 'opacity-0' : 'opacity-100'}`} 
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ 
+          transform: translateY !== "0px" ? `translateY(${translateY})` : undefined,
+          transition: transitionStyle
+        }}
+      >
+        {/* Zone de drag limitée à l'en-tête */}
+        <div 
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="pb-2 cursor-grab active:cursor-grabbing"
+        >
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 md:hidden"></div>
+          <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2"><User size={24} className="text-blue-600"/> Mon Profil</h3>
+              <button type="button" onClick={handleClose} className="text-slate-400 hover:text-slate-600 p-1 bg-slate-50 rounded-full z-10 relative"><X size={20}/></button>
+          </div>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); onUpdate(formData); onClose(); }} className="space-y-5">
+        <form onSubmit={(e) => { e.preventDefault(); onUpdate(formData); handleClose(); }} className="space-y-5">
             {/* IDENTITÉ */}
             <div className="tour-profile-identity grid grid-cols-2 gap-4">
                 <div>
@@ -472,8 +581,8 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
             </div>
 
             <div className="flex gap-3 justify-end mt-4 border-t border-slate-100 pt-4">
-                <Button variant="secondary" onClick={onClose} type="button">Annuler</Button>
-                <Button type="submit" disabled={loading}>Enregistrer</Button>
+              <Button variant="secondary" onClick={handleClose} type="button">Annuler</Button>
+              <Button type="submit" disabled={loading}>Enregistrer</Button>
             </div>
         </form>
       </div>
@@ -874,6 +983,13 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
   // États pour l'édition du nom de la position
   const [isEditingPosName, setIsEditingPosName] = useState(false);
   const [editedPosName, setEditedPosName] = useState('');
+
+  // Blocage du scroll de l'arrière-plan quand la vue détail est ouverte
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    // Restauration du scroll à la fermeture de la vue
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   // Met à jour les états édités si l'actif change
   useEffect(() => { 
@@ -1379,11 +1495,13 @@ return (
     
     {/* NOUVELLE Modale Bespoke pour le Compte Principal (Design Coordonné, pas de rouge) */}
     {showPrimaryModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" onMouseDown={(e) => { e.stopPropagation(); setShowPrimaryModal(false); }}>
+      <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-200" onMouseDown={(e) => { e.stopPropagation(); setShowPrimaryModal(false); }}>
         {/* On peut remettre un backdrop ici ou gérer z-index de la fenêtre de detail */}
         <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"></div>
         
-        <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200 flex flex-col items-center text-center relative z-10" onMouseDown={e => e.stopPropagation()}>
+        <div className="bg-white rounded-t-3xl md:rounded-3xl p-6 md:p-8 shadow-2xl w-full max-w-sm animate-in slide-in-from-bottom-1/2 md:slide-in-from-bottom-0 md:zoom-in-95 duration-300 flex flex-col items-center text-center relative z-10 pb-8 md:pb-8" onMouseDown={e => e.stopPropagation()}>
+          {/* Petite barre de drag (visuelle) pour mobile */}
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 md:hidden"></div>
           
           {/* Icône Appropriée : Grosse Étoile Amber */}
           <div className="p-4 bg-amber-50 rounded-full text-amber-400 mb-6 shadow-inner border border-amber-100">
@@ -2688,7 +2806,7 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
       <div className="grid gap-6">{Object.keys(groupedAssets).map(type => (<Card key={type} className="overflow-hidden border-slate-200 p-0 md:p-0"><div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-700 flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[type] }}></span>{CATEGORY_LABELS[type]}</h3><span className="font-bold text-slate-900">{formatCurrency(groupedAssets[type].reduce((sum, a) => sum + a.value, 0))}</span></div><div className="divide-y divide-slate-100">{groupedAssets[type].map(asset => (
         <div 
               key={asset.id} 
-              className="p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
+              className="p-5 md:p-4 flex justify-between items-center hover:bg-slate-50 transition group border-b border-slate-50 last:border-0 cursor-pointer"
               onClick={() => setFocusedAssetId(focusedAssetId === asset.id ? null : asset.id)}
             >
               <div className="flex items-center gap-4 overflow-hidden min-w-0">
@@ -3068,7 +3186,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
                 {displayTransactions.map(t => (
                   <div 
                     key={t.id} 
-                    className={`p-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
+                    className={`p-4 md:p-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 cursor-pointer group ${editId === t.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''}`}
                     onClick={() => setFocusedTxId(focusedTxId === t.id ? null : t.id)}
                   >
                     <div className="flex items-center gap-3 overflow-hidden min-w-0">
@@ -4573,8 +4691,8 @@ const showToast = (msg) => setToast({ message: msg });
       </main>
 
       {/* BOTTOM NAVIGATION (MOBILE) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 pb-safe">
-        <div className="flex justify-around items-center h-16">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)] pb-[env(safe-area-inset-bottom)]">
+        <div className="flex justify-around items-center h-[72px] pb-1">
           {[
             { id: 'dashboard', label: 'Accueil', icon: LayoutDashboard },
             { id: 'assets', label: 'Actifs', icon: Wallet },
