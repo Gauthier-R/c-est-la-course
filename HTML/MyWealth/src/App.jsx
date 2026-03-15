@@ -384,7 +384,7 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
 
         <form onSubmit={(e) => { e.preventDefault(); onUpdate(formData); onClose(); }} className="space-y-5">
             {/* IDENTITÉ */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="tour-profile-identity grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Prénom</label>
                     <input type="text" name="firstName" className="w-full p-2.5 rounded-lg border border-slate-300 outline-none" value={formData.firstName} onChange={handleChange} required />
@@ -395,8 +395,8 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
                 </div>
             </div>
 
-            {/* DONNÉES FINANCIÈRES (ORIGINALES) */}
-            <div className="border-t border-slate-100 pt-4">
+            {/* DONNÉES FINANCIÈRES */}
+            <div className="tour-profile-financial border-t border-slate-100 pt-4">
                 <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2"><Activity size={16}/> Données Financières</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
@@ -447,8 +447,8 @@ const ProfileModal = ({ isOpen, onClose, userProfile, onUpdate, assets, transact
                 </div>
             </div>
 
-            {/* SÉCURITÉ & BACKUP (NOUVEAU) */}
-            <div className="border-t border-slate-100 pt-4">
+            {/* SÉCURITÉ & BACKUP */}
+            <div className="tour-profile-security border-t border-slate-100 pt-4">
                 <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2"><ShieldCheck size={18} className="text-green-600"/> Sécurité & Sauvegarde</h4>
                 
                 <div className="flex items-start gap-3 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -1567,7 +1567,7 @@ return (
             )}
             <button 
               onClick={() => setActiveTab('history')}
-              className={`px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
+              className={`tour-asset-history-tab px-4 py-3 text-sm font-bold transition-all border-b-2 ${activeTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}
             >
               Historique
             </button>
@@ -1586,17 +1586,17 @@ return (
               <>
                 {['investissement', 'epargne_salariale', 'crypto'].includes(asset.type) && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <div className="tour-asset-cash p-3 bg-indigo-50 rounded-xl border border-indigo-100">
                       <p className="text-[10px] uppercase font-bold text-indigo-600 mb-1">Cash Disponible</p>
                       <p className="text-sm font-bold text-indigo-700">
                         {formatCurrency(asset.positions?.find(p => p.isCash)?.value || 0)}
                       </p>
                     </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="tour-asset-pru p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Total Versé (PRU)</p>
                       <p className="text-sm font-bold text-slate-700">{formatCurrency(totalInvested)}</p>
                     </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2 md:col-span-1">
+                    <div className="tour-asset-pv p-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2 md:col-span-1">
                       <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Plus-Value Latente</p>
                       <div className="flex items-center gap-2">
                         <p className={`text-sm font-bold ${plusValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1612,7 +1612,7 @@ return (
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="space-y-6">
-                    <Card className="h-fit bg-slate-50/50 border-slate-200 shadow-sm">
+                    <Card className="tour-asset-movement h-fit bg-slate-50/50 border-slate-200 shadow-sm">
                       <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
                         <ArrowRightLeft size={18} className="text-blue-600"/> Mouvement Interne
                       </h3>
@@ -1648,7 +1648,7 @@ return (
                       )}
                     </Card>
 
-                    <Card className="h-fit bg-slate-50/50 border-slate-200">
+                    <Card className="tour-asset-add-line h-fit bg-slate-50/50 border-slate-200">
                       <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PlusCircle size={20} className="text-blue-600"/> Ajouter une ligne</h3>
                       <form onSubmit={handleAddPosition} className="space-y-4">
                         <input type="text" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: ETF S&P 500" value={newPosition.name} onChange={(e) => setNewPosition({...newPosition, name: e.target.value})} />
@@ -1657,7 +1657,7 @@ return (
                     </Card>
                   </div>
 
-                  <Card className="lg:col-span-2 overflow-hidden flex flex-col border-slate-200 p-0">
+                  <Card className="tour-asset-lines lg:col-span-2 overflow-hidden flex flex-col border-slate-200 p-0">
                     <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
                       <h3 className="font-bold text-slate-700 flex items-center gap-2">Lignes détenues</h3>
                     </div>
@@ -2716,7 +2716,7 @@ const AssetsView = ({ assets, setAssets, transactions, onDeleteAsset }) => {
                   onClick={(e) => { 
                     e.stopPropagation(); 
                     setSelectedAsset(asset); 
-                    window.dispatchEvent(new Event('tour-asset-detail')); 
+                    window.dispatchEvent(new CustomEvent('tour-asset-detail', { detail: { isComposite: isCompositeType(asset.type) } })); 
                     window.dispatchEvent(new Event('close-tour'));
                   }} 
                   className="tour-asset-eye bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
@@ -3628,7 +3628,7 @@ const TOURS = {
   ],
   assets_form: [
     { target: '.tour-asset-form-type', placement: 'bottom', title: 'Le type de compte', content: "Choisissez 'Liquidités' pour vos livrets ou comptes courants. Pour la Bourse ou l'Immobilier, l'application calculera automatiquement vos plus-values !", disableBeacon: true },
-    { target: '.tour-asset-form-submit', placement: 'top', title: 'Validez la création', content: "Renseignez un nom, une banque et une valeur de départ, puis cliquez ici pour l'ajouter.", disableBeacon: true}
+    { target: '.tour-asset-form-submit', placement: 'top', title: 'Validez la création', content: "Renseignez un nom, une banque et une valeur de départ, puis cliquez ici pour l'ajouter.", disableBeacon: true, spotlightClicks: true, hideFooter: true }
   ],
   assets_eye: [
     { target: '.tour-asset-eye', placement: 'left', title: 'Voir le détail', content: "Votre compte est créé ! Cliquez sur cet œil pour découvrir comment modifier ses informations ou gérer ses lignes.", disableBeacon: true, spotlightClicks: true, hideFooter: true, icon: <Eye size={24} className="text-blue-500"/> }
@@ -3641,6 +3641,18 @@ const TOURS = {
     { target: '.tour-asset-update', placement: 'right', title: 'Mise à jour & Historique', content: "Actualisez votre solde en un clic, ou ajoutez un point dans le passé pour recréer l'historique oublié.", disableBeacon: true, icon: <History size={24} className="text-blue-500"/> },
     { target: '.tour-asset-history', placement: 'top', title: 'Historique Global', content: "Retrouvez ici toutes les transactions et variations de solde de ce compte.", disableBeacon: true, icon: <List size={24} className="text-slate-600"/> },
     { target: '.tour-asset-ai-tab', placement: 'bottom', title: 'Analyse IA ✨', content: "Basculez sur cet onglet pour obtenir une analyse poussée et des conseils personnalisés sur ce compte précis.", disableBeacon: true, icon: <Sparkles size={24} className="text-amber-500"/> }
+  ],
+  detail_composite: [
+    { target: '.tour-asset-name', placement: 'bottom-start', title: 'Modifiez à la volée', content: "Cliquez directement sur le nom ou la banque pour les renommer. C'est magique !", disableBeacon: true, icon: <Edit size={24} className="text-purple-600"/> },
+    { target: '.tour-asset-value', placement: 'left', title: 'Valorisation Actuelle', content: "Voici le solde total de votre compte, incluant vos espèces et vos lignes investies.", disableBeacon: true, icon: <DollarSign size={24} className="text-emerald-500"/> },
+    { target: '.tour-asset-cash', placement: 'bottom', title: 'Cash Disponible', content: "C'est la poche espèces de votre compte, l'argent qui dort et qui est prêt à être investi.", disableBeacon: true, icon: <PiggyBank size={24} className="text-blue-500"/> },
+    { target: '.tour-asset-pru', placement: 'bottom', title: 'Total Versé (PRU)', content: "C'est le montant total que vous avez réellement sorti de votre poche pour investir.", disableBeacon: true, icon: <ArrowDownRight size={24} className="text-slate-500"/> },
+    { target: '.tour-asset-pv', placement: 'bottom', title: 'Plus-Value Latente', content: "Vos gains ou pertes en temps réel par rapport à votre investissement de départ.", disableBeacon: true, icon: <TrendingUp size={24} className="text-green-500"/> },
+    { target: '.tour-asset-add-line', placement: 'right', title: 'Ajouter une ligne', content: "Commencez par créer vos différents supports (actions, ETF, cryptos, biens...).", disableBeacon: true, icon: <PlusCircle size={24} className="text-blue-600"/> },
+    { target: '.tour-asset-movement', placement: 'right', title: 'Mouvement Interne', content: "Une fois vos lignes créées, simulez des achats ou ventes pour déplacer les fonds depuis la poche espèces.", disableBeacon: true, icon: <ArrowRightLeft size={24} className="text-indigo-500"/> },
+    { target: '.tour-asset-lines', placement: 'top', title: 'Lignes Détenues', content: "La liste de tous vos investissements actuels. Cliquez dessus pour voir leur détail complet !", disableBeacon: true, icon: <List size={24} className="text-slate-600"/> },
+    { target: '.tour-asset-history-tab', placement: 'bottom', title: 'Historique', content: "Retrouvez ici le journal de vos opérations et la courbe d'évolution globale du compte.", disableBeacon: true, icon: <History size={24} className="text-blue-500"/> },
+    { target: '.tour-asset-ai-tab', placement: 'bottom', title: 'Analyse IA ✨', content: "L'IA peut analyser vos positions et vous suggérer des arbitrages sur ce compte.", disableBeacon: true, icon: <Sparkles size={24} className="text-amber-500"/> }
   ],
   budget: [
     { target: 'body', placement: 'center', title: 'Votre Budget & Flux 💸', content: "Bienvenue dans le centre névralgique de vos finances. C'est ici que vous allez suivre l'évolution de chaque euro gagné ou dépensé.", disableBeacon: true, icon: <ArrowRightLeft size={24} className="text-blue-600"/> },
@@ -3655,6 +3667,11 @@ const TOURS = {
     { target: '.tour-ai-flash', placement: 'right', title: 'Analyses Flash', content: "Pas d'inspiration ? Cliquez sur l'un de ces boutons pour lancer une analyse financière complète en un clin d'œil.", disableBeacon: true, icon: <Zap size={24} className="text-amber-500"/> },
     { target: '.tour-ai-upload', placement: 'top-start', title: 'Analyse de Documents', content: "La vraie magie est ici : envoyez un relevé bancaire, une fiche de paie ou un document SCPI (PDF/Image) pour que l'IA le décrypte pour vous !", disableBeacon: true, icon: <Cloud size={24} className="text-blue-500"/> },
     { target: '.tour-ai-chat-input', placement: 'top', title: 'À vous de jouer !', content: "Posez votre première question. Par exemple : 'Comment investir 500€ ce mois-ci ?'. C'est à vous !", disableBeacon: true, icon: <MessageSquare size={24} className="text-indigo-600"/> }
+  ],
+  profile: [
+    { target: '.tour-profile-identity', placement: 'bottom', title: 'Votre Identité', content: "Vos informations de base pour une expérience plus personnalisée sur votre tableau de bord.", disableBeacon: true, icon: <User size={24} className="text-blue-600"/> },
+    { target: '.tour-profile-financial', placement: 'top', title: 'Données Financières', content: "Ces informations sont cruciales ! Elles permettent à l'IA de comprendre votre situation et d'adapter ses conseils (ex: tolérance au risque).", disableBeacon: true, icon: <Activity size={24} className="text-indigo-600"/> },
+    { target: '.tour-profile-security', placement: 'top', title: 'Sécurité & Sauvegarde', content: "Activez les rapports mensuels par email, ou exportez manuellement vos données pour créer une sauvegarde de sécurité.", disableBeacon: true, icon: <ShieldCheck size={24} className="text-green-600"/> }
   ]
 };
 
@@ -3721,9 +3738,16 @@ export default function App() {
     else if (activeTab === 'advisor') startTour('advisor');
   }, [activeTab, user, loading, assets, userProfile, startTour]);
 
+  // Déclencheur à l'ouverture de la modale Profil
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      startTour('profile');
+    }
+  }, [isProfileModalOpen, startTour]);
+
   // Déclencheurs et fermetures via Événements Custom
   useEffect(() => {
-    const handleDetailOpen = () => startTour('detail');
+    const handleDetailOpen = (e) => startTour(e.detail?.isComposite ? 'detail_composite' : 'detail');
     const handleFormOpen = () => startTour('assets_form');
     const handleAssetCreated = () => startTour('assets_eye');
     
@@ -4415,14 +4439,13 @@ const showToast = (msg) => setToast({ message: msg });
           filter: none !important;
           position: relative !important;
           z-index: 10001 !important;
+          outline: 2px solid #93c5fd !important;
+          outline-offset: 2px;
         }
 
         /* Force l'affichage de la barre d'action (Oeil) pendant l'étape correspondante */
         .tour-assets_eye-step-0 .tour-asset-row-actions {
           display: flex !important;
-        }
-          outline: 2px solid #93c5fd !important;
-          outline-offset: 2px;
         }
 
         /* Barre de défilement personnalisée pour toute l'app */
