@@ -3756,7 +3756,7 @@ const TOURS = {
     { target: '.tour-asset-primary', placement: 'bottom', title: 'Compte Principal', content: "Cliquez sur cette étoile pour définir ce compte par défaut lors de vos saisies rapides de dépenses.", disableBeacon: true },
     { target: '.tour-asset-value', placement: 'left', title: 'Valorisation Actuelle', content: "Voici le solde total de votre compte en temps réel.", disableBeacon: true, icon: <DollarSign size={24} className="text-emerald-500"/> },
     { target: '.tour-asset-chart', placement: 'bottom', title: 'Évolution du solde', content: "Suivez visuellement la courbe de croissance de votre actif au fil du temps.", disableBeacon: true, icon: <TrendingUp size={24} className="text-indigo-500"/> },
-    { target: '.tour-asset-update', placement: 'right', title: 'Mise à jour & Historique', content: "Actualisez votre solde en un clic, ou ajoutez un point dans le passé pour recréer l'historique oublié.", disableBeacon: true, icon: <History size={24} className="text-blue-500"/> },
+    { target: '.tour-asset-update', placement: 'top', title: 'Mise à jour & Historique', content: "Actualisez votre solde en un clic, ou ajoutez un point dans le passé pour recréer l'historique oublié.", disableBeacon: true, icon: <History size={24} className="text-blue-500"/> },
     { target: '.tour-asset-history', placement: 'top', title: 'Historique Global', content: "Retrouvez ici toutes les transactions et variations de solde de ce compte.", disableBeacon: true, icon: <List size={24} className="text-slate-600"/> },
     { target: '.tour-asset-ai-tab', placement: 'bottom', title: 'Analyse IA ✨', content: "Basculez sur cet onglet pour obtenir une analyse poussée et des conseils personnalisés sur ce compte précis.", disableBeacon: true, icon: <Sparkles size={24} className="text-amber-500"/> }
   ],
@@ -3830,6 +3830,14 @@ export default function App() {
     const completedTours = userProfile.completedTours || [];
     
     if (!completedTours.includes(tourKey)) {
+      // --- FIX MATHÉMATIQUE JOYRIDE ---
+      // Si on lance un tutoriel dans une modale fixée (comme le profil), 
+      // on remet l'arrière plan tout en haut pour éviter que Joyride 
+      // ne fausse ses calculs en ajoutant le scroll de la page cachée.
+      if (tourKey === 'profile') {
+        window.scrollTo(0, 0);
+      }
+
       setTimeout(() => {
         const isMobile = window.innerWidth < 768;
         const responsiveSteps = TOURS[tourKey].map(step => {
@@ -3839,6 +3847,20 @@ export default function App() {
           } else if (newTarget === '.tour-profile') {
              newTarget = `.tour-profile-${isMobile ? 'mobile' : 'desktop'}`;
           }
+
+          // Réduction chirurgicale de la cible sur mobile
+          if (isMobile) {
+            // Vues Détail Actif
+            if (newTarget === '.tour-asset-update') newTarget = '.tour-asset-update h3';
+            if (newTarget === '.tour-asset-history') newTarget = '.tour-asset-history h3';
+            if (newTarget === '.tour-asset-lines') newTarget = '.tour-asset-lines h3';
+            
+            // Vues Modale Profil
+            if (newTarget === '.tour-profile-identity') newTarget = '.tour-profile-identity label';
+            if (newTarget === '.tour-profile-financial') newTarget = '.tour-profile-financial h4';
+            if (newTarget === '.tour-profile-security') newTarget = '.tour-profile-security h4';
+          }
+          
           return { ...step, target: newTarget };
         });
         
@@ -3898,6 +3920,33 @@ export default function App() {
       window.removeEventListener('close-tour', handleCloseTour);
     };
   }, [startTour, user, userProfile]);
+
+  // --- AUTO-SCROLL POUR LE TUTORIEL (MOBILE & DESKTOP) ---
+  useEffect(() => {
+    if (tourState.run && tourState.steps[tourState.stepIndex]) {
+      // Un délai très court suffit maintenant
+      const timer = setTimeout(() => {
+        const currentStep = tourState.steps[tourState.stepIndex];
+        const currentTarget = currentStep.target;
+        
+        if (typeof currentTarget === 'string' && currentTarget !== 'body') {
+          const el = document.querySelector(currentTarget);
+          if (el) {
+            // --- SCROLL INSTANTANÉ (AUTO) ---
+            // Évite la latence de l'animation smooth qui désynchronise Joyride.
+            // L'élément est centré d'un coup sec, puis Joyride dessine la lumière par-dessus.
+            el.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+
+            // On force un recalcul unique juste après le "snap"
+            setTimeout(() => {
+              window.dispatchEvent(new Event('resize'));
+            }, 50);
+          }
+        }
+      }, 150); 
+      return () => clearTimeout(timer);
+    }
+  }, [tourState.run, tourState.stepIndex, tourState.steps]);
 
   // Fonction asynchrone pour sauvegarder en base
   const handleJoyrideCallback = async (data) => {
@@ -4517,7 +4566,7 @@ const showToast = (msg) => setToast({ message: msg });
         callback={handleJoyrideCallback}
         tooltipComponent={CustomTooltip}
         disableOverlayClose={true}
-        disableScrolling={true}
+        disableScrolling={false}
         spotlightPadding={8}
         floaterProps={{ 
           disableAnimation: true,
