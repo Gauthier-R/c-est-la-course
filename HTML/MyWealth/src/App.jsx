@@ -228,28 +228,38 @@ const processFlowData = (timeRange, transactions) => {
 };
 
 // --- API HELPER ---
-async function callGeminiAPI(systemPrompt, userPrompt, imageBase64 = null) {
+async function callGeminiAPI(systemPrompt, chatHistory, userPrompt, imageBase64 = null) {
   try {
-    const parts = [{ text: `INSTRUCTIONS :\n${systemPrompt}\n\nREQUÊTE :\n${userPrompt}` }];
+    // 1. On convertit l'historique local vers le format "user/model" attendu par Gemini
+    const contents = (chatHistory || []).map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+
+    // 2. On prépare le tout nouveau message
+    const currentParts = [{ text: userPrompt }];
     
     // Ajout de l'image si elle existe (format attendu : data:image/jpeg;base64,...)
     if (imageBase64) {
-      parts.push({
+      currentParts.push({
         inline_data: {
           mime_type: imageBase64.split(';')[0].split(':')[1],
           data: imageBase64.split(',')[1]
         }
       });
     }
+    
+    // 3. On ajoute ce nouveau message à la fin de l'historique
+    contents.push({ role: "user", parts: currentParts });
 
     const response = await fetch(
-      // On passe sur v1beta et gemini-2.5-flash pour supporter l'outil Google Search
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          contents: [{ role: "user", parts }],
+          system_instruction: { parts: [{ text: systemPrompt }] }, // Le comportement global est géré ici proprement
+          contents: contents, // L'historique complet de la discussion
           tools: [{ googleSearch: {} }] // Activation de la recherche Web
         })
       }
@@ -3384,7 +3394,7 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
       2. CONSEIL STRATÉGIQUE : Utilise les données fournies (Plus-values, PRU, répartition Cash/Investi) pour donner des conseils précis (ex: "Ton ETF S&P500 est à +15%").
       3. RECHERCHE WEB SUR MESURE : Tu AS ACCÈS à Google. Utilise-le silencieusement pour vérifier les cours ou l'actualité macro-économique SEULEMENT si la question de l'utilisateur le nécessite.
       4. GESTION DES SALUTATIONS & HORS-SUJET : Si l'utilisateur envoie un simple "Salut", "Ça va ?" ou un message sans contexte, réponds brièvement avec le sourire. Liste-lui ensuite rapidement ce que tu peux faire pour lui (bilan patrimonial, analyse de dépenses, optimisation d'arbitrage, lecture de documents) et demande-lui comment tu peux l'aider aujourd'hui.
-      5. STYLE DIRECT & IMAGE : Va droit au but, sois jovial et professionnel. Si une image est jointe, compare-la au contexte patrimonial. Termine TOUJOURS par une question ouverte pour creuser la stratégie de l'utilisateur si pertinentre ou simplement lancer l'échange.
+      5. STYLE DIRECT & IMAGE : Va droit au but, sois jovial et professionnel. Ne redis pas "Bonjour" ou autre tournure du même genre si tu l'as déjà dit précédement. Si une image est jointe, compare-la au contexte patrimonial. Termine TOUJOURS par une question ouverte pour creuser la stratégie de l'utilisateur si pertinentre ou simplement lancer l'échange.
 
       FORMATTAGE :
       - ## pour les titres.
@@ -3394,7 +3404,12 @@ const AiAdvisorView = ({ assets, transactions, userProfile, messages, setMessage
     `;
 
     try {
-        const aiResponse = await callGeminiAPI(systemPrompt, userMessage, currentImage);
+        // On ajoute ton excellente règle dynamiquement au prompt système existant
+        const finalSystemPrompt = systemPrompt + "\n6. CONTINUITÉ : Ne redis pas 'Bonjour' ou de formules de politesse similaires si tu l'as déjà dit dans l'historique. Garde un ton naturel et direct dans la continuité de l'échange.";
+        
+        // On passe 'messages' (l'historique actuel AVANT le nouveau message) à l'API
+        const aiResponse = await callGeminiAPI(finalSystemPrompt, messages, userMessage, currentImage);
+        
         setMessages([...newMessages, { role: 'assistant', content: aiResponse }]);
     } catch (e) { 
         setMessages([...newMessages, { role: 'assistant', content: "Erreur technique. Vérifiez votre connexion." }]); 
