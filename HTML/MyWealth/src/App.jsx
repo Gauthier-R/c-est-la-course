@@ -1369,7 +1369,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
   };
 
 return (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900">
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200 text-slate-900" onMouseDown={onClose}>
     {/* Modale standard pour les suppressions */}
     <ConfirmationModal 
       isOpen={!!deleteConfig} 
@@ -1379,11 +1379,11 @@ return (
     
     {/* NOUVELLE Modale Bespoke pour le Compte Principal (Design Coordonné, pas de rouge) */}
     {showPrimaryModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowPrimaryModal(false)}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200" onMouseDown={(e) => { e.stopPropagation(); setShowPrimaryModal(false); }}>
         {/* On peut remettre un backdrop ici ou gérer z-index de la fenêtre de detail */}
         <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"></div>
         
-        <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200 flex flex-col items-center text-center relative z-10" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded-3xl p-8 shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200 flex flex-col items-center text-center relative z-10" onMouseDown={e => e.stopPropagation()}>
           
           {/* Icône Appropriée : Grosse Étoile Amber */}
           <div className="p-4 bg-amber-50 rounded-full text-amber-400 mb-6 shadow-inner border border-amber-100">
@@ -1414,7 +1414,7 @@ return (
       </div>
     )}
     
-    <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300 relative z-10">
+    <div className="bg-white md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[85vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300 relative z-10" onMouseDown={(e) => e.stopPropagation()}>
       
       {/* --- VUE DÉTAIL DE L'ACTIF --- */}
       {viewMode === 'asset' && (
