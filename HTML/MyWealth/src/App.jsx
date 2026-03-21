@@ -1488,7 +1488,7 @@ const AssetDetailOverlay = ({ asset, onClose, onUpdate, transactions }) => {
     setIsAnalyzing(true);
     const context = `Analyse l'actif: ${asset.name} (${asset.type}). Markdown.`;
     try {
-        const result = await callGeminiAPI("Expert Bourse. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", context);
+        const result = await callGeminiAPI("Expert Bourse. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", [], context);
         setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -2281,7 +2281,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
     setIsAnalyzing(true);
     const context = `Analyse le patrimoine: ${netWorth}€. Evolution: ${netWorthGrowth}%.`;
     try {
-      const result = await callGeminiAPI("Expert finance. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", context);
+      const result = await callGeminiAPI("Expert finance. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", [], context);
       setAiAnalysis(result);
     } catch (e) { setAiAnalysis("Erreur."); }
     setIsAnalyzing(false);
@@ -2290,7 +2290,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleForecast = async () => {
     setIsForecasting(true);
     try {
-      const resultText = await callGeminiAPI("Expert prévision. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
+      const resultText = await callGeminiAPI("Expert prévision. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", [], `Flux: ${JSON.stringify(cashflowHistoryData.slice(-3))}. JSON: {revenus, depenses, solde, conseil}`);
       const jsonStr = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       setForecast(JSON.parse(jsonStr));
     } catch (e) { setForecast({ revenus: 0, depenses: 0, solde: 0, conseil: "Erreur." }); }
@@ -2300,7 +2300,7 @@ const DashboardView = ({ assets, transactions, setActiveTab, onDeleteTransaction
   const handleTxAnalysis = async () => {
     setIsTxAnalyzing(true);
     try {
-      const result = await callGeminiAPI("Analyste budget. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
+      const result = await callGeminiAPI("Analyste budget. Utilise ## pour les titres, - pour les listes, et <b> pour mettre en gras les mots importants. Interdiction d'utiliser les caractères * ou **.", [], `Transac: ${JSON.stringify(transactions.slice(0, 5))}`);
       setTxAnalysis(result);
     } catch (e) { setTxAnalysis("Erreur."); }
     setIsTxAnalyzing(false);
@@ -3011,7 +3011,7 @@ const BudgetView = ({ transactions, assets, onAddTransaction, onDeleteTransactio
     Réponds uniquement avec le JSON.
   `;
     try {
-      const resultText = await callGeminiAPI("Extraction transaction JSON.", userPrompt);
+      const resultText = await callGeminiAPI("Extraction transaction JSON.", [], userPrompt);
       
       const jsonMatch = resultText.match(/\{[\s\S]*\}/);
       
