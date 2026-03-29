@@ -269,7 +269,7 @@ class _EditMealDialogState extends State<EditMealDialog> {
                                   Expanded(
                                     flex: 3,
                                     child: DropdownButtonFormField<String>(
-                                      value: _selectedUnits[index],
+                                      initialValue: _selectedUnits[index],
                                       items: _units.map((unit) => DropdownMenuItem(
                                         value: unit,
                                         child: Text(unit, style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10), color: Colors.black)),

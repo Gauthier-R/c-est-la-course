@@ -111,7 +111,7 @@ class WeeklyIngredientList extends StatelessWidget {
                               boxShadow: isChecked
                                   ? [
                                       BoxShadow(
-                                        color: AppColors.primaryOrange.withOpacity(0.4),
+                                        color: AppColors.primaryOrange.withValues(alpha: 0.4),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),

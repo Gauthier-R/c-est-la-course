@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "fr.dinners.app"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

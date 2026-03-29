@@ -54,7 +54,7 @@ class RecipeCard extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: Chip(
                     label: Text(item),
-                    backgroundColor: item == time ? getTimeColor(item).withOpacity(0.2) : null,
+                    backgroundColor: item == time ? getTimeColor(item).withValues(alpha: 0.2) : null,
                     labelStyle: item == time ? TextStyle(color: getTimeColor(item)) : null,
                   ),
                 ),

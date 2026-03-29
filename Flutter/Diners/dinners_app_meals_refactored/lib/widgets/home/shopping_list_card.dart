@@ -80,7 +80,7 @@ class ShoppingListCard extends StatelessWidget {
                     Expanded(
                       flex: 3,
                       child: DropdownButtonFormField<String>(
-                        value: selectedUnit,
+                        initialValue: selectedUnit,
                         items: units.map((u) => DropdownMenuItem(
                           value: u,
                           child: Text(u, style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 12))),
@@ -233,7 +233,7 @@ class ShoppingListCard extends StatelessWidget {
                                       boxShadow: isChecked
                                           ? [
                                               BoxShadow(
-                                                color: AppColors.primaryOrange.withOpacity(0.4),
+                                                color: AppColors.primaryOrange.withValues(alpha: 0.4),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 2),
                                               ),

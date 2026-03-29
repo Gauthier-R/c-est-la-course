@@ -25,7 +25,6 @@ void main() async {
   // 🛡️ Activation de App Check en mode Debug (utile pour éviter les blocages en dev)
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug, // ✅ On utilise le fournisseur debug car l'app n'est pas publiée
-    isTokenAutoRefreshEnabled: true, // 🔄 Firebase régénère automatiquement le jeton toutes les 30 min
   );
 
   // 🗓️ Génération de la clé de semaine en cours (utile pour l'organisation des repas)

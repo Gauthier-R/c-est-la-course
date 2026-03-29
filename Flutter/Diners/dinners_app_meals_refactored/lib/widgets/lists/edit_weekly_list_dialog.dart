@@ -148,7 +148,7 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
                               Expanded(
                                 flex: 3,
                                 child: DropdownButtonFormField<String>(
-                                  value: selectedUnit,
+                                  initialValue: selectedUnit,
                                   items: units.map((u) => DropdownMenuItem(
                                     value: u,
                                     child: Text(u, style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 12), color: Colors.black)),

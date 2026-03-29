@@ -42,31 +42,20 @@ dependencies:
   firebase_core: ^3.13.0
   cloud_firestore: ^5.6.6
   firebase_auth: ^5.5.2
+  firebase_app_check: ^0.3.2+10
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.14.3 # Flutter Launcher Icons is a package that simplifies the task of updating your app's launcher icon.
+  flutter_launcher_icons: ^0.14.3
+  flutter_lints: ^5.0.0
 
 flutter_launcher_icons:
   android: true
   ios: false
   remove_alpha_ios: true
-  image_path: "assets/Logo_CLC.png" # Path to your icon image
-# Run this command to generate the icons
-#flutter pub run flutter_launcher_icons:main 
+  image_path: "assets/Logo_CLC.png"
 
-
-
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^5.0.0
-
-# For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.

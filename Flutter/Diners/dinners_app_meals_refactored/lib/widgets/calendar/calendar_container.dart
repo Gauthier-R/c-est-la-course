@@ -114,8 +114,8 @@ class _CalendarContainerState extends State<CalendarContainer> {
                 MealSlotRow(
                   icon: Icons.nightlight_round,
                   gradientColors: [
-                    AppColors.primaryOrange.withOpacity(0.8),
-                    AppColors.darkOrange.withOpacity(0.8),
+                    AppColors.primaryOrange.withValues(alpha: 0.8),
+                    AppColors.darkOrange.withValues(alpha: 0.8),
                   ],
                   label: "Soir",
                   mealText: selectedMeals['soir'] ?? '',

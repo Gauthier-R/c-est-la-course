@@ -88,7 +88,7 @@ class _AnimatedCentralButtonState extends State<AnimatedCentralButton>
                     widget.isRecipeTab ? 20 : 30),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryOrange.withOpacity(0.4),
+                    color: AppColors.primaryOrange.withValues(alpha: 0.4),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   )

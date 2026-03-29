@@ -73,7 +73,7 @@ class CurrentWeekListScreen extends StatelessWidget {
                     Expanded(
                       flex: 3,
                       child: DropdownButtonFormField<String>(
-                        value: selectedUnit,
+                        initialValue: selectedUnit,
                         items: units
                             .map((u) => DropdownMenuItem(
                                   value: u,
