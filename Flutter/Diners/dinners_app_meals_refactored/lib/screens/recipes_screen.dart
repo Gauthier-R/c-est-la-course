@@ -1,23 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../utils/responsive_helper.dart';
 import '../utils/app_colors.dart';
 import '../widgets/recipes/recipes_header.dart';
 import '../widgets/recipes/recipes_filters.dart';
 import '../widgets/recipes/recipes_card.dart';
-
-class Recipe {
-  final String name;
-  final String season;
-  final String time;
-  final String type;
-
-  Recipe({
-    required this.name,
-    required this.season,
-    required this.time,
-    required this.type,
-  });
-}
+import '../providers/recipe_provider.dart';
+import 'add_recipe_screen.dart';
+import 'recipe_detail_screen.dart';
 
 class RecipesScreen extends StatefulWidget {
   const RecipesScreen({super.key});
@@ -31,36 +21,20 @@ class _RecipesScreenState extends State<RecipesScreen> {
   String selectedTime = 'Tous';
   String selectedType = 'Tous';
 
-  final List<Recipe> allRecipes = [
-    Recipe(name: 'Spaghettis', season: '☀️', time: '15min', type: '🥗'),
-    Recipe(name: 'Tartiflette', season: '❄️', time: '+1h', type: '🍗'),
-    Recipe(name: 'Salade César', season: '🌞❄️', time: '1h', type: '🥗'),
-    Recipe(name: 'Gâteau au chocolat', season: '🌞❄️', time: '1h', type: '🍰'),
-    Recipe(name: 'Soupe', season: '❄️', time: '15min', type: '🥗'),
-  ];
-
-  List<Recipe> filteredRecipes = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _applyFilters();
-  }
-
-  void _applyFilters() {
-    setState(() {
-      filteredRecipes = allRecipes.where((recipe) {
-        final matchSeason = selectedSeason == 'Tous' || recipe.season == selectedSeason;
-        final matchTime = selectedTime == 'Tous' || recipe.time == selectedTime;
-        final matchType = selectedType == 'Tous' || recipe.type == selectedType;
-        return matchSeason && matchTime && matchType;
-      }).toList();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final maxListHeight = MediaQuery.of(context).size.height * 0.45;
+    
+    // Écoute du provider pour récupérer la vraie liste Firestore
+    final allRecipes = Provider.of<RecipeProvider>(context).recipes;
+    
+    // Filtrage dynamique des recettes
+    final filteredRecipes = allRecipes.where((recipe) {
+      final matchSeason = selectedSeason == 'Tous' || recipe.season == selectedSeason;
+      final matchTime = selectedTime == 'Tous' || recipe.time == selectedTime;
+      final matchType = selectedType == 'Tous' || recipe.type == selectedType;
+      return matchSeason && matchTime && matchType;
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -86,17 +60,13 @@ class _RecipesScreenState extends State<RecipesScreen> {
                     ),
                     SizedBox(height: ResponsiveHelper.heightPercent(context, 0.02)),
                     ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: maxListHeight,
-                      ),
+                      constraints: BoxConstraints(maxHeight: maxListHeight),
                       child: Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal: ResponsiveHelper.widthPercent(context, 0.04),
-                        ),
+                        margin: EdgeInsets.symmetric(horizontal: ResponsiveHelper.widthPercent(context, 0.04)),
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(20), // arrondi tous les coins
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: filteredRecipes.isEmpty
                             ? Center(
@@ -118,16 +88,21 @@ class _RecipesScreenState extends State<RecipesScreen> {
                                   final recipe = filteredRecipes[index];
                                   return RecipeCard(
                                     name: recipe.name,
+                                    imageBase64: recipe.imageBase64,
                                     indicators: [recipe.time, recipe.type, recipe.season],
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => RecipeDetailScreen(recipe: recipe))
+                                      );
+                                    },
                                   );
                                 },
                               ),
                       ),
                     ),
                     Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: ResponsiveHelper.heightPercent(context, 0.02),
-                      ),
+                      padding: EdgeInsets.symmetric(vertical: ResponsiveHelper.heightPercent(context, 0.02)),
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
@@ -139,7 +114,10 @@ class _RecipesScreenState extends State<RecipesScreen> {
                         ),
                         child: ElevatedButton(
                           onPressed: () {
-                            // TODO: ajout recette
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AddRecipeScreen()),
+                            );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
@@ -148,9 +126,7 @@ class _RecipesScreenState extends State<RecipesScreen> {
                               horizontal: ResponsiveHelper.widthPercent(context, 0.15),
                               vertical: ResponsiveHelper.heightPercent(context, 0.015),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           ),
                           child: Text(
                             'Ajouter une recette',
@@ -172,18 +148,9 @@ class _RecipesScreenState extends State<RecipesScreen> {
             selectedSeason: selectedSeason,
             selectedTime: selectedTime,
             selectedType: selectedType,
-            onSeasonChanged: (val) {
-              selectedSeason = val;
-              _applyFilters();
-            },
-            onTimeChanged: (val) {
-              selectedTime = val;
-              _applyFilters();
-            },
-            onTypeChanged: (val) {
-              selectedType = val;
-              _applyFilters();
-            },
+            onSeasonChanged: (val) => setState(() => selectedSeason = val),
+            onTimeChanged: (val) => setState(() => selectedTime = val),
+            onTypeChanged: (val) => setState(() => selectedType = val),
           ),
         ],
       ),

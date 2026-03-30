@@ -14,12 +14,13 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomAppBar(
+    return Container(
       color: Colors.white,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: ResponsiveHelper.widthPercent(context, 0.02),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Align(
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _buildIcon(context, icon: Icons.home, index: 0),
           _buildIcon(context, icon: Icons.calendar_today, index: 1),
@@ -27,6 +28,7 @@ class BottomNavBar extends StatelessWidget {
           _buildIcon(context, icon: Icons.list, index: 2),
           _buildIcon(context, icon: Icons.menu_book, index: 3),
         ],
+      ),
       ),
     );
   }

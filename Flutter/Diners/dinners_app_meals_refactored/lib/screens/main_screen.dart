@@ -7,6 +7,7 @@ import 'shopping_list_screen.dart';
 import 'recipes_screen.dart';
 import '../widgets/home/bottom_nav_bar.dart';
 import '../animations/animated_central_button.dart';
+import 'add_recipe_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -38,8 +39,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onRecipePressed() {
-    debugPrint("Ajout recette pressé !");
-    // TODO: ouvrir formulaire d'ajout recette
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const AddRecipeScreen()));
   }
 
   Color _getNavBarColor(int index) {
@@ -56,12 +56,11 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   bool _shouldShowNotch(int index) {
-    return index != 4; // Pas d'encoche pour la page Recettes
+    return true; // Toujours afficher l'encoche, même pour les recettes
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isRecipeTab = _selectedIndex == 4;
     final double buttonHeight = 60;
     final double navBarHeight = ResponsiveHelper.heightPercent(context, 0.09);
     final Color navBarColor = _getNavBarColor(_selectedIndex);
@@ -117,7 +116,7 @@ class _MainScreenState extends State<MainScreen> {
           child: Transform.translate(
             offset: Offset(0, -buttonHeight * 0.35),
             child: AnimatedCentralButton(
-              isRecipeTab: isRecipeTab,
+              isRecipeTab: false, // Forcer le bouton central classique
               onAddPressed: _onAddPressed,
               onRecipePressed: _onRecipePressed,
             ),

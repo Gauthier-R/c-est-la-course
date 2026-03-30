@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart'; // 🔤 Utilisation de polices 
 import 'utils/app_colors.dart'; // 🎨 Fichier perso pour les couleurs de l'app
 import 'package:provider/provider.dart'; // 📦 Gestion des états via Provider
 import 'providers/meal_provider.dart'; // 🍽️ Logique métier liée aux repas
+import 'providers/recipe_provider.dart'; // 📖 Logique métier liée aux recettes
 import 'package:intl/date_symbol_data_local.dart'; // 📅 Données locales pour le formatage de dates
 import 'screens/weekly_list_screen.dart'; // 📋 Écran de la liste hebdo
 import 'screens/history_overview_screen.dart'; // 📚 Historique des repas
@@ -40,10 +41,13 @@ void main() async {
   // 🔄 Synchronisation des données avec Firestore en temps réel
   mealProvider.startLiveSync();
 
-  // 🧠 Intégration du provider à toute l'application Flutter
+  // 🧠 Intégration des providers à toute l'application Flutter
   runApp(
-    ChangeNotifierProvider.value(
-      value: mealProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: mealProvider),
+        ChangeNotifierProvider(create: (_) => RecipeProvider()),
+      ],
       child: const MyApp(), // 🏁 Lancement de l'application
     ),
   );

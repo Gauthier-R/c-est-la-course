@@ -50,21 +50,21 @@ class RecipesFilters extends StatelessWidget {
           children: [
             _buildLabeledDropdown(
               label: 'Saison',
-              items: ['Tous', '☀️', '❄️', '🌞❄️'],
+              items: ['Tous', 'Été', 'Hiver', 'Les deux'],
               selected: selectedSeason,
               onChanged: onSeasonChanged,
             ),
             const SizedBox(width: 8),
             _buildLabeledDropdown(
               label: 'Temps',
-              items: ['Tous', '15min', '1h', '+1h'],
+              items: ['Tous', '- 15 min', '- 1h', '+ 1h'],
               selected: selectedTime,
               onChanged: onTimeChanged,
             ),
             const SizedBox(width: 8),
             _buildLabeledDropdown(
               label: 'Type',
-              items: ['Tous', '🥗', '🍗', '🍰'],
+              items: ['Tous', 'Entrée', 'Plat', 'Dessert'],
               selected: selectedType,
               onChanged: onTypeChanged,
             ),

@@ -1,11 +1,15 @@
 // Mise à jour du layout dans EditMealDialog pour une ligne optimisée avec champ responsive pour nom, quantité, unité et suppression
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../models/recipe.dart';
+import '../../providers/recipe_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/responsive_helper.dart';
 import '../../providers/meal_provider.dart';
+import 'recipe_picker.dart';
 
 class EditMealDialog extends StatefulWidget {
   final String moment;
@@ -141,6 +145,45 @@ class _EditMealDialogState extends State<EditMealDialog> {
     Navigator.pop(context);
   }
 
+  void _openRecipePicker() {
+    final recipes = Provider.of<RecipeProvider>(context, listen: false).recipes;
+    if (recipes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aucune recette disponible.')));
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: const RecipePickerBottomSheet(),
+      ),
+    ).then((selectedRecipe) {
+      if (selectedRecipe != null && selectedRecipe is Recipe) {
+        setState(() {
+          _mealController.text = selectedRecipe.name;
+          _ingredients.clear();
+          _qtyControllers.clear();
+          _selectedUnits.clear();
+
+          for (var ing in selectedRecipe.ingredients) {
+            _ingredients.add({
+              'name': ing['name'],
+              'quantity': ing['quantity'],
+              'unit': ing['unit'],
+              'checked': false,
+              'moment': widget.moment,
+              'date': widget.date,
+            });
+            _qtyControllers.add(TextEditingController(text: ing['quantity'].toString()));
+            _selectedUnits.add(ing['unit'].toString());
+          }
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -163,7 +206,10 @@ class _EditMealDialogState extends State<EditMealDialog> {
                   labelText: 'Votre Plat',
                   hintText: 'Ex: Poulet au curry',
                   hintStyle: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
-                  suffixIcon: const Icon(Icons.menu_book_outlined),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.menu_book_outlined, color: AppColors.primaryOrange),
+                    onPressed: _openRecipePicker,
+                  ),
                 ),
               ),
               SizedBox(height: ResponsiveHelper.heightPercent(context, 0.02)),
