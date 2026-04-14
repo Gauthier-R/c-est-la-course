@@ -47,6 +47,7 @@ dependencies:
   image: ^4.8.0
   uuid: ^4.5.3
   google_sign_in: 6.2.1
+  google_generative_ai: ^0.4.6 # Parsing intelligent des recettes via Gemini
 
 dev_dependencies:
   flutter_test:

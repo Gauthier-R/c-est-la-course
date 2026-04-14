@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
+import '../services/recipe_ocr_service.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_theme.dart';
 import 'recipe_detail_screen.dart';
@@ -20,19 +22,20 @@ class AddRecipeScreen extends StatefulWidget {
 class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  String _name = '';
   String _type = 'Plat';
   String _season = 'Les deux';
   String _time = '- 1h';
-  String _description = '';
   String? _imageBase64;
   final List<Map<String, dynamic>> _ingredients = [];
+  bool _isScanning = false;
 
   final List<String> _types = ['Entrée', 'Plat', 'Dessert'];
   final List<String> _seasons = ['Été', 'Hiver', 'Les deux'];
   final List<String> _times = ['- 15 min', '- 1h', '+ 1h'];
   final List<String> _units = ['QT', 'g', 'kg', 'ml', 'cl', 'L', 'c.à.s', 'c.à.c', 'pincée'];
 
+  final _nameCtrl = TextEditingController();
+  final _descriptionCtrl = TextEditingController();
   final _ingredientNameCtrl = TextEditingController();
   final _ingredientQtyCtrl = TextEditingController();
   String _selectedUnit = 'QT';
@@ -41,11 +44,11 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   void initState() {
     super.initState();
     if (widget.recipeToEdit != null) {
-      _name = widget.recipeToEdit!.name;
+      _nameCtrl.text = widget.recipeToEdit!.name;
       _type = widget.recipeToEdit!.type;
       _season = widget.recipeToEdit!.season;
       _time = widget.recipeToEdit!.time;
-      _description = widget.recipeToEdit!.description;
+      _descriptionCtrl.text = widget.recipeToEdit!.description;
       _imageBase64 = widget.recipeToEdit!.imageBase64;
       _ingredients.addAll(List.from(widget.recipeToEdit!.ingredients));
     }
@@ -53,6 +56,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
+    _descriptionCtrl.dispose();
     _ingredientNameCtrl.dispose();
     _ingredientQtyCtrl.dispose();
     super.dispose();
@@ -87,8 +92,14 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
     final newId = widget.recipeToEdit?.id ?? FirebaseFirestore.instance.collection('recipes').doc().id;
     final recipe = Recipe(
-      id: newId, name: _name, type: _type, season: _season,
-      time: _time, description: _description, imageBase64: _imageBase64, ingredients: _ingredients,
+      id: newId,
+      name: _nameCtrl.text.trim(),
+      type: _type,
+      season: _season,
+      time: _time,
+      description: _descriptionCtrl.text.trim(),
+      imageBase64: _imageBase64,
+      ingredients: _ingredients,
     );
     final provider = Provider.of<RecipeProvider>(context, listen: false);
     if (widget.recipeToEdit != null) {
@@ -99,6 +110,68 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => RecipeDetailScreen(recipe: recipe)));
     }
   }
+
+  /// Lance l'analyse Gemini : photo → IA → JSON → pré-remplissage des champs
+  Future<void> _scanRecipeFromPhoto() async {
+    try {
+      final pickedFile = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        maxWidth: 1600,
+        maxHeight: 2000,
+      );
+      if (pickedFile == null || !mounted) return;
+
+      setState(() => _isScanning = true);
+
+      // On envoie directement l'image à Gemini
+      final result = await RecipeOcrService.analyze(File(pickedFile.path));
+
+      if (!mounted) return;
+      setState(() {
+        _isScanning = false;
+        if (result.name != null && _nameCtrl.text.isEmpty) {
+          _nameCtrl.text = result.name!;
+        }
+        if (result.description != null && _descriptionCtrl.text.isEmpty) {
+          _descriptionCtrl.text = result.description!;
+        }
+        if (result.time != null) {
+          _time = result.time!;
+        }
+        if (result.ingredients.isNotEmpty) {
+          _ingredients.addAll(result.ingredients);
+        }
+      });
+
+      final good = result.detectedFields >= 2;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            good
+                ? '✅ Magie ! La recette a été scannée et analysée.'
+                : '⚠️ L\'IA n\'a pas tout trouvé. Complétez manuellement.',
+          ),
+          backgroundColor: good ? AppColors.primaryGreen : Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isScanning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'analyse : $e'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
 
   InputDecoration _inputDecoration(String label, {String? hint}) {
     return InputDecoration(
@@ -125,6 +198,39 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         scrolledUnderElevation: 0,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: Text(isEditing ? 'Modifier la recette' : 'Nouvelle recette', style: AppTheme.titleMedium),
+        actions: [
+          if (!isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: _isScanning
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryOrange),
+                      ),
+                    )
+                  : Tooltip(
+                      message: 'Scanner une recette papier',
+                      child: InkWell(
+                        onTap: _scanRecipeFromPhoto,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryOrange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.document_scanner_outlined,
+                            color: AppColors.primaryOrange,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
@@ -200,11 +306,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
               // ── NOM ─────────────────────────────────────────────
               TextFormField(
-                initialValue: _name,
+                controller: _nameCtrl,
                 style: AppTheme.bodyText,
                 decoration: _inputDecoration('Nom du plat'),
                 validator: (v) => v == null || v.trim().isEmpty ? 'Ce champ est requis' : null,
-                onSaved: (v) => _name = v!.trim(),
               ),
               const SizedBox(height: 12),
 
@@ -224,11 +329,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
               // ── DESCRIPTION ──────────────────────────────────────
               TextFormField(
-                initialValue: _description,
+                controller: _descriptionCtrl,
                 maxLines: 5,
                 style: AppTheme.bodyText,
                 decoration: _inputDecoration('Étapes de préparation', hint: 'Décrivez comment préparer ce plat...'),
-                onSaved: (v) => _description = v?.trim() ?? '',
               ),
 
               const SizedBox(height: 28),
