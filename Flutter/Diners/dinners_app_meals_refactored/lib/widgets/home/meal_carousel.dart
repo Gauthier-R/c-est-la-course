@@ -57,6 +57,7 @@ class _MealCarouselState extends State<MealCarousel>
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: 15,
+                allowImplicitScrolling: true,
                 itemBuilder: (context, index) {
                   final date = getDateFromIndex(index);
                   final meals = provider.selectedMealsFor(date);

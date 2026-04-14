@@ -104,12 +104,13 @@ class _PremiumMealCard extends StatelessWidget {
     return Row(
       children: [
         // Icône ou photo de la recette
-        matchingRecipe != null
+        (matchingRecipe != null && matchingRecipe.imageBytes != null)
             ? ClipOval(
                 child: Image.memory(
-                  base64Decode(matchingRecipe.imageBase64!),
+                  matchingRecipe.imageBytes!,
                   width: 36, height: 36,
                   fit: BoxFit.cover,
+                  gaplessPlayback: true, // Évite le scintillement si rebuild
                 ),
               )
             : Container(
@@ -187,6 +188,7 @@ class _PremiumMealCarouselState extends State<_PremiumMealCarousel> {
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: 15,
+                allowImplicitScrolling: true, // Précharge les pages adjacentes
                 itemBuilder: (context, index) {
                   final date = _dateFromIndex(index);
                   final meals = provider.selectedMealsFor(date);
