@@ -7,12 +7,14 @@ class Header extends StatelessWidget {
   final String username;
   final String initials;
   final VoidCallback onSettingsPressed;
+  final VoidCallback onSandboxPressed;
 
   const Header({
     super.key,
     required this.username,
     required this.initials,
     required this.onSettingsPressed,
+    required this.onSandboxPressed,
   });
 
   @override
@@ -78,11 +80,21 @@ class Header extends StatelessWidget {
                 ),
                 Padding(
                   padding: EdgeInsets.only(top: ResponsiveHelper.heightPercent(context, 0.005)),
-                  child: IconButton(
-                    icon: Icon(Icons.settings,
-                        size: ResponsiveHelper.widthPercent(context, 0.07),
-                        color: Colors.white),
-                    onPressed: onSettingsPressed,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.science_outlined,
+                            size: ResponsiveHelper.widthPercent(context, 0.07),
+                            color: Colors.white),
+                        onPressed: onSandboxPressed,
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.settings,
+                            size: ResponsiveHelper.widthPercent(context, 0.07),
+                            color: Colors.white),
+                        onPressed: onSettingsPressed,
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../utils/app_colors.dart';
-import '../utils/responsive_helper.dart';
+import '../utils/app_theme.dart';
 import 'add_recipe_screen.dart';
 
 class RecipeDetailScreen extends StatelessWidget {
@@ -14,111 +14,190 @@ class RecipeDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Écoute les changements dynamiques de la recette via Firestore
     final currentRecipe = Provider.of<RecipeProvider>(context)
         .recipes
         .firstWhere((r) => r.id == recipe.id, orElse: () => recipe);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(currentRecipe.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.primaryOrange,
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => AddRecipeScreen(recipeToEdit: currentRecipe))
-              );
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (currentRecipe.imageBase64 != null && currentRecipe.imageBase64!.isNotEmpty)
-              Image.memory(
-                base64Decode(currentRecipe.imageBase64!),
-                height: 250,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              )
-            else
+      body: CustomScrollView(
+        slivers: [
+          // ── APP BAR avec image en arrière-plan ──────────────────
+          SliverAppBar(
+            expandedHeight: 280,
+            pinned: true,
+            backgroundColor: AppColors.background,
+            iconTheme: const IconThemeData(color: AppColors.textPrimary),
+            surfaceTintColor: Colors.transparent,
+            actions: [
               Container(
-                height: 200,
-                color: AppColors.primaryOrange.withValues(alpha: 0.2),
-                child: const Center(
-                  child: Icon(Icons.restaurant_menu, size: 80, color: AppColors.primaryOrange),
+                margin: const EdgeInsets.only(right: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8)],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: AppColors.primaryOrange),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => AddRecipeScreen(recipeToEdit: currentRecipe)));
+                  },
                 ),
               ),
-            Padding(
-              padding: EdgeInsets.all(ResponsiveHelper.widthPercent(context, 0.05)),
+            ],
+            leading: Container(
+              margin: const EdgeInsets.only(left: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8)],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: currentRecipe.imageBase64 != null && currentRecipe.imageBase64!.isNotEmpty
+                  ? Image.memory(
+                      base64Decode(currentRecipe.imageBase64!),
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      color: AppColors.secondaryYellow.withValues(alpha: 0.1),
+                      child: const Center(
+                        child: Icon(Icons.restaurant_menu, size: 80, color: AppColors.primaryOrange),
+                      ),
+                    ),
+            ),
+          ),
+
+          // ── CONTENU ──────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  // Nom de la recette
+                  Text(currentRecipe.name, style: AppTheme.titleHuge.copyWith(fontSize: 28)),
+                  const SizedBox(height: 16),
+
+                  // Badges info
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
                     children: [
-                      _buildInfoChip(Icons.access_time, currentRecipe.time),
-                      _buildInfoChip(Icons.category, currentRecipe.type),
-                      _buildInfoChip(Icons.wb_sunny, currentRecipe.season),
+                      if (currentRecipe.time.isNotEmpty) _buildBadge(Icons.access_time, currentRecipe.time, AppColors.primaryOrange),
+                      if (currentRecipe.type.isNotEmpty) _buildBadge(Icons.restaurant, currentRecipe.type, AppColors.primaryGreen),
+                      if (currentRecipe.season.isNotEmpty) _buildBadge(Icons.wb_sunny_outlined, currentRecipe.season, AppColors.secondaryYellow),
                     ],
                   ),
-                  SizedBox(height: ResponsiveHelper.heightPercent(context, 0.04)),
-                  const Text('Ingrédients', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primaryOrange)),
-                  const SizedBox(height: 10),
+
+                  const SizedBox(height: 32),
+
+                  // Section Ingrédients
+                  _buildSectionTitle('Ingrédients'),
+                  const SizedBox(height: 12),
                   if (currentRecipe.ingredients.isEmpty)
-                    const Text('Aucun ingrédient renseigné.', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
-                  ...currentRecipe.ingredients.map((ing) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.fiber_manual_record, size: 12, color: AppColors.darkOrange),
-                          const SizedBox(width: 8),
-                          Expanded(
+                    _buildEmptyHint('Aucun ingrédient renseigné.')
+                  else
+                    ...currentRecipe.ingredients.asMap().entries.map((entry) {
+                      final ing = entry.value;
+                      final isLast = entry.key == currentRecipe.ingredients.length - 1;
+                      return _buildIngredientRow(ing, showDivider: !isLast);
+                    }),
+
+                  const SizedBox(height: 32),
+
+                  // Section Préparation
+                  _buildSectionTitle('Préparation'),
+                  const SizedBox(height: 12),
+                  currentRecipe.description.isEmpty
+                      ? _buildEmptyHint('Aucune étape de préparation renseignée.')
+                      : SizedBox(
+                          width: double.infinity,
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12)],
+                            ),
                             child: Text(
-                              ing['name'],
-                              style: const TextStyle(fontSize: 16),
+                              currentRecipe.description,
+                              style: AppTheme.bodyText.copyWith(height: 1.7),
                             ),
                           ),
-                          Text(
-                            '${ing["quantity"]} ${ing["unit"]}',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                  SizedBox(height: ResponsiveHelper.heightPercent(context, 0.04)),
-                  const Text('Préparation', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primaryOrange)),
-                  const SizedBox(height: 10),
-                  Text(
-                    currentRecipe.description.isNotEmpty ? currentRecipe.description : 'Aucune étape de préparation renseignée.',
-                    style: TextStyle(fontSize: 16, color: currentRecipe.description.isNotEmpty ? Colors.black87 : Colors.grey, height: 1.5),
-                  ),
-                  SizedBox(height: ResponsiveHelper.heightPercent(context, 0.05)),
+                        ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label) {
-    if (label.isEmpty) return const SizedBox();
-    return Chip(
-      avatar: Icon(icon, size: 18, color: AppColors.darkOrange),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade300)),
+  Widget _buildBadge(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: AppTheme.labelSmall.copyWith(color: color, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Row(
+      children: [
+        Container(width: 4, height: 20, decoration: BoxDecoration(color: AppColors.primaryOrange, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 10),
+        Text(title, style: AppTheme.titleMedium),
+      ],
+    );
+  }
+
+  Widget _buildIngredientRow(Map<String, dynamic> ing, {bool showDivider = true}) {
+    return Column(
+      children: [
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(color: AppColors.primaryGreen, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Text(ing['name'] ?? '', style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600))),
+              Text(
+                '${ing["quantity"]} ${ing["unit"]}',
+                style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        if (showDivider) Divider(height: 1, color: Colors.grey.shade100, indent: 38),
+      ],
+    );
+  }
+
+  Widget _buildEmptyHint(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(text, style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic)),
     );
   }
 }

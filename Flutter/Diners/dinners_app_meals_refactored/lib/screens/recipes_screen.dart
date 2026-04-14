@@ -8,6 +8,7 @@ import '../widgets/recipes/recipes_card.dart';
 import '../providers/recipe_provider.dart';
 import 'add_recipe_screen.dart';
 import 'recipe_detail_screen.dart';
+import '../widgets/recipes/sandbox_recipes_screen.dart'; // L'import pour la bascule de design
 
 class RecipesScreen extends StatefulWidget {
   const RecipesScreen({super.key});
@@ -44,7 +45,8 @@ class _RecipesScreenState extends State<RecipesScreen> {
             children: [
               RecipesHeader(
                 onSettingsPressed: () {
-                  debugPrint("Paramètres recettes");
+                  // Astuce : On utilise le bouton paramètres du vieux header pour basculer en mode Sandbox !
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SandboxRecipesScreen()));
                 },
               ),
               SizedBox(height: ResponsiveHelper.heightPercent(context, 0.05)),

@@ -5,6 +5,7 @@ import '../widgets/home/meal_carousel.dart';
 import '../widgets/home/shopping_list_card.dart';
 import '../providers/meal_provider.dart';
 import '../utils/responsive_helper.dart';
+import 'sandbox_main_screen.dart'; // Nouvel import pointant vers le Hub central Sandbox
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,9 @@ class HomeScreen extends StatelessWidget {
                         initials: "GR",
                         onSettingsPressed: () {
                           debugPrint("Paramètres cliqués !");
+                        },
+                        onSandboxPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SandboxMainScreen()));
                         },
                       ),
                       SizedBox(height: ResponsiveHelper.heightPercent(context, 0.22)),

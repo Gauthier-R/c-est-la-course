@@ -7,6 +7,7 @@ import 'shopping_list_screen.dart';
 import 'recipes_screen.dart';
 import '../widgets/home/bottom_nav_bar.dart';
 import '../animations/animated_central_button.dart';
+import 'design_sandbox_screen.dart';
 import 'add_recipe_screen.dart';
 
 class MainScreen extends StatefulWidget {

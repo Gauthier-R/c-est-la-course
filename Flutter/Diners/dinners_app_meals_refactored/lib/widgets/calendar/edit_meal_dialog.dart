@@ -1,4 +1,4 @@
-// Mise à jour du layout dans EditMealDialog pour une ligne optimisée avec champ responsive pour nom, quantité, unité et suppression
+// Mise à jour du layout dans EditMealDialog — Style Apple Premium
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../../models/recipe.dart';
 import '../../providers/recipe_provider.dart';
 import '../../utils/app_colors.dart';
-import '../../utils/responsive_helper.dart';
+import '../../utils/app_theme.dart';
 import '../../providers/meal_provider.dart';
 import 'recipe_picker.dart';
 
@@ -58,6 +58,9 @@ class _EditMealDialogState extends State<EditMealDialog> {
   final List<String> _units = ['QT', 'g', 'kg', 'mL', 'L'];
   final List<String> _selectedUnits = [];
 
+  // Pour afficher l'aperçu de la recette sélectionnée
+  String? _selectedRecipeImage;
+
   @override
   void initState() {
     super.initState();
@@ -65,17 +68,27 @@ class _EditMealDialogState extends State<EditMealDialog> {
     _ingredients = List<Map<String, dynamic>>.from(widget.initialIngredients);
     _qtyControllers.addAll(_ingredients.map((e) => TextEditingController(text: e['quantity'].toString())));
     _selectedUnits.addAll(_ingredients.map((e) => e['unit']?.toString() ?? 'QT'));
+
+    // Chercher une image pour le repas initial si c'est une recette connue
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryFindRecipeImage());
+  }
+
+  void _tryFindRecipeImage() {
+    if (!mounted) return;
+    final name = _mealController.text.trim();
+    if (name.isEmpty) return;
+    final recipes = Provider.of<RecipeProvider>(context, listen: false).recipes;
+    final match = recipes.where((r) => r.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+    if (match != null && match.imageBase64 != null && match.imageBase64!.isNotEmpty) {
+      setState(() => _selectedRecipeImage = match.imageBase64);
+    }
   }
 
   void _addIngredient() {
     setState(() {
       _ingredients.add({
-        'name': '',
-        'quantity': 1,
-        'unit': 'QT',
-        'checked': false,
-        'moment': widget.moment,
-        'date': widget.date
+        'name': '', 'quantity': 1, 'unit': 'QT',
+        'checked': false, 'moment': widget.moment, 'date': widget.date
       });
       _qtyControllers.add(TextEditingController(text: '1'));
       _selectedUnits.add('QT');
@@ -90,13 +103,11 @@ class _EditMealDialogState extends State<EditMealDialog> {
     });
   }
 
-  void _updateIngredientName(int index, String name) {
-    _ingredients[index]['name'] = name;
-  }
+  void _updateIngredientName(int index, String name) => _ingredients[index]['name'] = name;
 
   void _updateQuantity(int index, String value) {
-    final quantity = int.tryParse(value);
-    _ingredients[index]['quantity'] = (quantity != null && quantity > 0) ? quantity : 1;
+    final qty = int.tryParse(value);
+    _ingredients[index]['quantity'] = (qty != null && qty > 0) ? qty : 1;
     _qtyControllers[index].text = _ingredients[index]['quantity'].toString();
   }
 
@@ -114,34 +125,23 @@ class _EditMealDialogState extends State<EditMealDialog> {
     final cleanIngredients = _ingredients
         .where((ing) => ing['name'].toString().trim().isNotEmpty)
         .map((e) => {
-              'name': e['name'],
-              'quantity': e['quantity'],
-              'unit': e['unit'] ?? 'QT',
-              'checked': e['checked'] ?? false,
-              'moment': widget.moment,
-              'date': widget.date,
+              'name': e['name'], 'quantity': e['quantity'],
+              'unit': e['unit'] ?? 'QT', 'checked': e['checked'] ?? false,
+              'moment': widget.moment, 'date': widget.date,
             })
         .toList();
 
     if (mealName.isNotEmpty) {
       widget.onValidate(mealName, cleanIngredients);
-
-      final mealProvider = Provider.of<MealProvider>(context, listen: false);
-      mealProvider.updateMealAndIngredients(
-        widget.date,
-        widget.moment,
-        mealName,
-        cleanIngredients,
-      );
-
+      Provider.of<MealProvider>(context, listen: false)
+          .updateMealAndIngredients(widget.date, widget.moment, mealName, cleanIngredients);
       Navigator.pop(context);
     }
   }
 
   void _delete() {
     widget.onValidate('', []);
-    final mealProvider = Provider.of<MealProvider>(context, listen: false);
-    mealProvider.deleteMeal(widget.date, widget.moment);
+    Provider.of<MealProvider>(context, listen: false).deleteMeal(widget.date, widget.moment);
     Navigator.pop(context);
   }
 
@@ -163,18 +163,15 @@ class _EditMealDialogState extends State<EditMealDialog> {
       if (selectedRecipe != null && selectedRecipe is Recipe) {
         setState(() {
           _mealController.text = selectedRecipe.name;
+          _selectedRecipeImage = (selectedRecipe.imageBase64?.isNotEmpty ?? false) ? selectedRecipe.imageBase64 : null;
           _ingredients.clear();
           _qtyControllers.clear();
           _selectedUnits.clear();
-
           for (var ing in selectedRecipe.ingredients) {
             _ingredients.add({
-              'name': ing['name'],
-              'quantity': ing['quantity'],
-              'unit': ing['unit'],
-              'checked': false,
-              'moment': widget.moment,
-              'date': widget.date,
+              'name': ing['name'], 'quantity': ing['quantity'],
+              'unit': ing['unit'], 'checked': false,
+              'moment': widget.moment, 'date': widget.date,
             });
             _qtyControllers.add(TextEditingController(text: ing['quantity'].toString()));
             _selectedUnits.add(ing['unit'].toString());
@@ -184,221 +181,300 @@ class _EditMealDialogState extends State<EditMealDialog> {
     });
   }
 
+  String get _momentLabel => widget.moment == 'midi' ? 'Déjeuner' : 'Dîner';
+  Color get _momentColor => widget.moment == 'midi' ? AppColors.secondaryYellow : AppColors.primaryGreen;
+  IconData get _momentIcon => widget.moment == 'midi' ? Icons.wb_sunny : Icons.nightlight_round;
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        'Enregistrez le repas du ${widget.moment}',
-        style: TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: ResponsiveHelper.scalableFont(context, 16),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 30, offset: const Offset(0, 10))],
         ),
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _mealController,
-                decoration: InputDecoration(
-                  labelText: 'Votre Plat',
-                  hintText: 'Ex: Poulet au curry',
-                  hintStyle: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.menu_book_outlined, color: AppColors.primaryOrange),
-                    onPressed: _openRecipePicker,
-                  ),
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── HEADER ──────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              decoration: BoxDecoration(
+                color: _momentColor.withValues(alpha: 0.08),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               ),
-              SizedBox(height: ResponsiveHelper.heightPercent(context, 0.02)),
-              Container(
-                padding: EdgeInsets.all(ResponsiveHelper.widthPercent(context, 0.02)),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(ResponsiveHelper.widthPercent(context, 0.03)),
-                ),
-                constraints: BoxConstraints(maxHeight: ResponsiveHelper.heightPercent(context, 0.4)),
-                child: Column(
-                  children: [
-                    Row(
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: _momentColor.withValues(alpha: 0.15), shape: BoxShape.circle),
+                    child: Icon(_momentIcon, color: _momentColor, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Liste',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: ResponsiveHelper.scalableFont(context, 14),
-                          ),
-                        ),
+                        Text(_momentLabel, style: AppTheme.labelSmall.copyWith(color: _momentColor, fontWeight: FontWeight.w700)),
+                        Text('Planifier un repas', style: AppTheme.titleMedium.copyWith(fontSize: 16)),
                       ],
                     ),
-                    SizedBox(height: ResponsiveHelper.heightPercent(context, 0.01)),
-                    GestureDetector(
-                      onTap: _addIngredient,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.grey.shade400),
+                    onPressed: () => Navigator.pop(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── APERÇU IMAGE RECETTE ───────────────────
+                    if (_selectedRecipeImage != null)
+                      Container(
+                        height: 120,
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          image: DecorationImage(
+                            image: MemoryImage(base64Decode(_selectedRecipeImage!)),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.3)],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // ── CHAMP NOM DU REPAS ─────────────────────
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.add_circle_outline, color: Colors.green, size: 15),
-                          SizedBox(width: ResponsiveHelper.widthPercent(context, 0.015)),
-                          Text(
-                            'Ajouter Ingrédient',
-                            style: TextStyle(
-                              color: Colors.green,
-                              fontSize: ResponsiveHelper.scalableFont(context, 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _mealController,
+                              style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
+                              decoration: InputDecoration(
+                                hintText: 'Nom du plat (ex: Poulet rôti)',
+                                hintStyle: AppTheme.bodyText.copyWith(color: Colors.grey.shade400),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              ),
+                            ),
+                          ),
+                          // Bouton Recette
+                          GestureDetector(
+                            onTap: _openRecipePicker,
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryOrange.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.menu_book_outlined, color: AppColors.primaryOrange, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text('Recettes', style: AppTheme.labelSmall.copyWith(color: AppColors.primaryOrange, fontWeight: FontWeight.w700)),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(height: ResponsiveHelper.heightPercent(context, 0.03)),
-                    if (_ingredients.isEmpty)
-                      Padding(
-                        padding: EdgeInsets.symmetric(vertical: ResponsiveHelper.heightPercent(context, 0.1048)),
-                        child: Text(
-                          "Aucun ingrédient ajouté.",
-                          style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
+
+                    const SizedBox(height: 16),
+
+                    // ── SECTION INGRÉDIENTS ────────────────────
+                    Row(
+                      children: [
+                        Text('Ingrédients', style: AppTheme.titleMedium.copyWith(fontSize: 14)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: _addIngredient,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add, color: AppColors.primaryGreen, size: 16),
+                                const SizedBox(width: 4),
+                                Text('Ajouter', style: AppTheme.labelSmall.copyWith(color: AppColors.primaryGreen, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
                         ),
-                      )
-                    else
-                      SizedBox(
-                        height: ResponsiveHelper.heightPercent(context, 0.27),
-                        child: ListView.builder(
-                          itemCount: _ingredients.length,
-                          itemBuilder: (context, index) {
-                            return Padding(
-                              padding: EdgeInsets.symmetric(vertical: ResponsiveHelper.heightPercent(context, 0.005)),
-                              child: Row(
-                                children: [
-                                  // Nom ingrédient (50%)
-                                  Expanded(
-                                    flex: 7,
-                                    child: TextField(
-                                      decoration: InputDecoration(
-                                        hintText: 'Ingrédient',
-                                        isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // ── ZONE INGRÉDIENTS (min = taille état vide, scrollable au-delà) ──
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 100, maxHeight: 200),
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _ingredients.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.shopping_basket_outlined, size: 32, color: Colors.grey.shade300),
+                                    const SizedBox(height: 8),
+                                    Text('Aucun ingrédient ajouté',
+                                      style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary)),
+                                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                                itemCount: _ingredients.length,
+                                separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+                                itemBuilder: (context, index) => Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.primaryGreen, shape: BoxShape.circle)),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        flex: 7,
+                                        child: TextField(
+                                          decoration: InputDecoration(
+                                            hintText: 'Ingrédient',
+                                            hintStyle: AppTheme.bodyText.copyWith(color: Colors.grey.shade400),
+                                            border: InputBorder.none,
+                                            isDense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                          ),
+                                          style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
+                                          controller: TextEditingController(text: _ingredients[index]['name'])
+                                            ..selection = TextSelection.collapsed(offset: _ingredients[index]['name'].length),
+                                          onChanged: (v) => _updateIngredientName(index, v),
+                                        ),
                                       ),
-                                      style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 12)),
-                                      controller: TextEditingController(text: _ingredients[index]['name'])
-                                        ..selection = TextSelection.collapsed(offset: _ingredients[index]['name'].length),
-                                      onChanged: (value) => _updateIngredientName(index, value),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        flex: 2,
+                                        child: TextField(
+                                          controller: _qtyControllers[index],
+                                          keyboardType: TextInputType.number,
+                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                          textAlign: TextAlign.center,
+                                          decoration: InputDecoration(
+                                            border: InputBorder.none, isDense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                            hintText: '1',
+                                            hintStyle: AppTheme.labelSmall.copyWith(color: Colors.grey.shade400),
+                                          ),
+                                          style: AppTheme.labelSmall.copyWith(fontWeight: FontWeight.w700),
+                                          onTap: () => _qtyControllers[index].selection = TextSelection(baseOffset: 0, extentOffset: _qtyControllers[index].text.length),
+                                          onChanged: (v) => _updateQuantity(index, v),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      DropdownButtonHideUnderline(
+                                        child: DropdownButton<String>(
+                                          value: _selectedUnits[index],
+                                          isDense: true,
+                                          style: AppTheme.labelSmall.copyWith(fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                                          items: _units.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                                          onChanged: (v) => _updateUnit(index, v),
+                                        ),
+                                      ),
+                                  const SizedBox(width: 4),
+                                  GestureDetector(
+                                    onTap: () => _removeIngredient(index),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
+                                      child: Icon(Icons.close, color: Colors.red.shade400, size: 14),
                                     ),
                                   ),
-                                  SizedBox(width: ResponsiveHelper.widthPercent(context, 0.01)),
-
-                                  // Quantité (15%)
-                                  Expanded(
-                                    flex: 2,
-                                    child: TextField(
-                                      controller: _qtyControllers[index],
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                      decoration: const InputDecoration(
-                                        prefixText: 'x',
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                                      ),
-                                      onTap: () => _qtyControllers[index].selection = TextSelection(baseOffset: 0, extentOffset: _qtyControllers[index].text.length),
-                                      onTapOutside: (_) {
-                                        if (_qtyControllers[index].text.isEmpty) {
-                                          _qtyControllers[index].text = '1';
-                                          _updateQuantity(index, '1');
-                                        }
-                                      },
-                                      onChanged: (value) => _updateQuantity(index, value),
-                                      style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 12)),
-                                    ),
-                                  ),
-                                  SizedBox(width: ResponsiveHelper.widthPercent(context, 0.01)),
-
-                                  // Unité (20%)
-                                  Expanded(
-                                    flex: 3,
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: _selectedUnits[index],
-                                      items: _units.map((unit) => DropdownMenuItem(
-                                        value: unit,
-                                        child: Text(unit, style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10), color: Colors.black)),
-                                      )).toList(),
-                                      onChanged: (value) => _updateUnit(index, value),
-                                      decoration: const InputDecoration(
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                      ),
-                                      style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
-                                      isExpanded: true,
-                                    ),
-                                  ),
-                                  SizedBox(width: ResponsiveHelper.widthPercent(context, 0.01)),
-
-                                  // Supprimer (15%)
-                                  Expanded(
-                                    flex: 1,
-                                    child: IconButton(
-                                      icon: Icon(Icons.delete, color: Colors.red, size: ResponsiveHelper.scalableFont(context, 18)),
-                                      onPressed: () => _removeIngredient(index),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    ),
-                                  )
                                 ],
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-      actionsPadding: EdgeInsets.only(
-        left: ResponsiveHelper.widthPercent(context, 0.04),
-        right: ResponsiveHelper.widthPercent(context, 0.04),
-        bottom: ResponsiveHelper.heightPercent(context, 0.015),
-      ),
-      actions: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              onPressed: _delete,
-              child: Text(
-                'Supprimer',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontSize: ResponsiveHelper.scalableFont(context, 10),
-                ),
+            ),
+
+            // ── ACTIONS ─────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -4))],
+              ),
+              child: Row(
+                children: [
+                  // Supprimer
+                  TextButton.icon(
+                    onPressed: _delete,
+                    icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 16),
+                    label: Text('Supprimer', style: AppTheme.labelSmall.copyWith(color: Colors.red.shade400)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                  ),
+                  const Spacer(),
+                  // Annuler
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Annuler', style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary)),
+                  ),
+                  const SizedBox(width: 8),
+                  // Valider
+                  ElevatedButton(
+                    onPressed: _validate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryOrange,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: Text('Valider', style: AppTheme.bodyText.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Annuler',
-                    style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
-                  ),
-                ),
-                SizedBox(width: ResponsiveHelper.widthPercent(context, 0.01)),
-                ElevatedButton(
-                  onPressed: _validate,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryOrange,
-                  ),
-                  child: Text(
-                    'Valider',
-                    style: TextStyle(fontSize: ResponsiveHelper.scalableFont(context, 10)),
-                  ),
-                ),
-              ],
-            )
           ],
-        )
-      ],
+        ),
+      ),
     );
   }
 }

@@ -4,9 +4,35 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:dinners_app/utils/date_format.dart';
+import 'dart:async';
 
 class MealProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  String? _groupId;
+  
+  CollectionReference<Map<String, dynamic>> _getMealsCollection() {
+    if (_groupId == null || _groupId!.isEmpty) {
+      throw Exception("MealProvider requires a valid groupId");
+    }
+    return _firestore.collection('groups').doc(_groupId).collection('meals');
+  }
+
+  void updateGroupId(String? newGroupId) {
+    if (_groupId != newGroupId) {
+      _groupId = newGroupId;
+      _cachedMeals.clear();
+      _syncSubscription?.cancel();
+      if (_groupId != null && _groupId!.isNotEmpty) {
+        startLiveSync();
+        preloadAllMeals().catchError((e) => debugPrint("Preload error: $e"));
+      } else {
+        notifyListeners();
+      }
+    }
+  }
+
+  StreamSubscription? _syncSubscription;
 
   DateTime _selectedDay = DateTime.now();
   DateTime get selectedDay => _selectedDay;
@@ -21,8 +47,12 @@ class MealProvider extends ChangeNotifier {
 
   final Map<String, Map<String, dynamic>> _cachedMeals = {};
 
+  /// Exposé pour le moteur de recommandation
+  Map<String, Map<String, dynamic>> get cachedMeals => Map.unmodifiable(_cachedMeals);
+
   void startLiveSync() {
-    _firestore.collection('meals').snapshots().listen((snapshot) {
+    _syncSubscription?.cancel();
+    _syncSubscription = _getMealsCollection().snapshots().listen((snapshot) {
       final updatedKeys = snapshot.docs.map((doc) => doc.id).toSet();
       final existingKeys = _cachedMeals.keys.toSet();
 
@@ -49,7 +79,7 @@ class MealProvider extends ChangeNotifier {
 
   Stream<Map<String, dynamic>> getMealsForDate(DateTime date) {
     final key = _getDateKey(date);
-    return _firestore.collection('meals').doc(key).snapshots().map((doc) {
+    return _getMealsCollection().doc(key).snapshots().map((doc) {
       final data = doc.data() ?? {};
       _cachedMeals[key] = data;
       return data;
@@ -75,7 +105,7 @@ class MealProvider extends ChangeNotifier {
       };
     }).toList();
 
-    await _firestore.collection('meals').doc(key).set({
+    await _getMealsCollection().doc(key).set({
       moment: {
         'meal': meal,
         'ingredients': ingredients,
@@ -92,7 +122,7 @@ class MealProvider extends ChangeNotifier {
 
   Future<void> deleteMeal(DateTime date, String moment) async {
     final key = _getDateKey(date);
-    final ref = _firestore.collection('meals').doc(key);
+    final ref = _getMealsCollection().doc(key);
     final snapshot = await ref.get();
     if (!snapshot.exists) return;
 
@@ -133,7 +163,7 @@ class MealProvider extends ChangeNotifier {
     }
 
     final weekKey = _getWeekKey(referenceDay);
-    final weeklyDoc = await _firestore.collection('meals').doc(weekKey).get();
+    final weeklyDoc = await _getMealsCollection().doc(weekKey).get();
     final weeklyData = weeklyDoc.data();
     if (weeklyData != null && weeklyData['extras'] != null) {
       final extras = List<Map<String, dynamic>>.from(
@@ -145,30 +175,74 @@ class MealProvider extends ChangeNotifier {
   }
 
   Future<void> addWeeklyExtra(String weekKey, String name, int quantity, [String unit = 'QT']) async {
-    final ref = _firestore.collection('meals').doc(weekKey);
+    final ref = _getMealsCollection().doc(weekKey);
     final snapshot = await ref.get();
     final data = snapshot.data() ?? {};
-
     final List<dynamic> currentExtras = data['extras'] ?? [];
-
     final DateTime weekStart = _getStartOfWeekFromWeekKey(weekKey);
 
-    currentExtras.add({
-      'name': name,
-      'quantity': quantity,
-      'unit': unit,
-      'checked': false,
-      'moment': 'extra',
-      'date': weekStart.toIso8601String(),
-      'weekKey': weekKey,
-    });
+    // Cherche si un ingrédient EXTRA du même nom existe déjà
+    final normalizedName = name.trim().toLowerCase();
+    final existingIndex = currentExtras.indexWhere(
+      (e) => (e['name'] as String? ?? '').trim().toLowerCase() == normalizedName,
+    );
+
+    if (existingIndex != -1) {
+      // Fusionne les quantités
+      final existing = Map<String, dynamic>.from(currentExtras[existingIndex]);
+      existing['quantity'] = ((existing['quantity'] as num?) ?? 0).toInt() + quantity;
+      currentExtras[existingIndex] = existing;
+    } else {
+      currentExtras.add({
+        'name': name,
+        'quantity': quantity,
+        'unit': unit,
+        'checked': false,
+        'moment': 'extra',
+        'date': weekStart.toIso8601String(),
+        'weekKey': weekKey,
+      });
+    }
 
     await ref.set({'extras': currentExtras}, SetOptions(merge: true));
-
     _cachedMeals[weekKey] ??= {};
     _cachedMeals[weekKey]!['extras'] = currentExtras;
-
     notifyListeners();
+  }
+
+  /// Retourne les extras bruts de la semaine donnée (pour détection de doublon dans les dialogs)
+  Future<List<Map<String, dynamic>>> getWeeklyExtras(String weekKey) async {
+    final weeklyDoc = await _getMealsCollection().doc(weekKey).get();
+    final data = weeklyDoc.data();
+    if (data == null || data['extras'] == null) return [];
+    return List<Map<String, dynamic>>.from(
+      (data['extras'] as List).map((e) => Map<String, dynamic>.from(e)),
+    );
+  }
+
+  /// Retourne TOUS les ingrédients de la semaine (repas + extras) pour détection de doublon
+  Future<List<Map<String, dynamic>>> getAllWeeklyIngredientNames(String weekKey, DateTime weekStart) async {
+    final List<String> weekDates = List.generate(7, (i) => _getDateKey(weekStart.add(Duration(days: i))));
+    final List<String> allNames = [];
+    for (final dateStr in weekDates) {
+      final data = _cachedMeals[dateStr];
+      if (data == null) continue;
+      for (final moment in ['midi', 'soir']) {
+        final entry = data[moment];
+        if (entry != null && entry['ingredients'] != null) {
+          for (final ing in (entry['ingredients'] as List)) {
+            final n = (ing['name'] as String? ?? '').trim().toLowerCase();
+            if (n.isNotEmpty) allNames.add(n);
+          }
+        }
+      }
+    }
+    final extras = await getWeeklyExtras(weekKey);
+    for (final e in extras) {
+      final n = (e['name'] as String? ?? '').trim().toLowerCase();
+      if (n.isNotEmpty) allNames.add(n);
+    }
+    return allNames.map((n) => {'name': n}).toList();
   }
 
 
@@ -181,7 +255,7 @@ class MealProvider extends ChangeNotifier {
       final int quantity = ingredient['quantity'];
 
       final key = _getDateKey(date);
-      final ref = _firestore.collection('meals').doc(key);
+      final ref = _getMealsCollection().doc(key);
       final snapshot = await ref.get();
       if (!snapshot.exists) return;
 
@@ -230,7 +304,7 @@ class MealProvider extends ChangeNotifier {
       final String weekKey = ingredient['weekKey'] ?? _getWeekKey(date);
       print('📆 [TOGGLE] weekKey calculé: \$weekKey');
 
-      final ref = _firestore.collection('meals').doc(weekKey);
+      final ref = _getMealsCollection().doc(weekKey);
       final snapshot = await ref.get();
       if (!snapshot.exists) return;
 
@@ -367,11 +441,16 @@ class MealProvider extends ChangeNotifier {
 
 
   Future<void> preloadAllMeals() async {
-    final snapshot = await _firestore.collection('meals').get();
-    for (final doc in snapshot.docs) {
-      _cachedMeals[doc.id] = doc.data();
+    if (_groupId == null || _groupId!.isEmpty) return;
+    try {
+      final snapshot = await _getMealsCollection().get();
+      for (final doc in snapshot.docs) {
+        _cachedMeals[doc.id] = doc.data();
+      }
+      notifyListeners();
+    } catch(e) {
+      print('Erreur preload: $e');
     }
-    notifyListeners();
   }
 
   void updateMealAndIngredients(DateTime date, String moment, String meal, List<Map<String, dynamic>> ingredients) {
@@ -386,7 +465,7 @@ class MealProvider extends ChangeNotifier {
       };
     }).toList();
 
-    await _firestore.collection('meals').doc(weekKey).set({'extras': extras}, SetOptions(merge: true));
+    await _getMealsCollection().doc(weekKey).set({'extras': extras}, SetOptions(merge: true));
     _cachedMeals[weekKey] ??= {};
     _cachedMeals[weekKey]!['extras'] = extras;
     notifyListeners();

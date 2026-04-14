@@ -7,12 +7,16 @@ import 'providers/recipe_provider.dart'; // 📖 Logique métier liée aux recet
 import 'package:intl/date_symbol_data_local.dart'; // 📅 Données locales pour le formatage de dates
 import 'screens/weekly_list_screen.dart'; // 📋 Écran de la liste hebdo
 import 'screens/history_overview_screen.dart'; // 📚 Historique des repas
-import 'screens/main_screen.dart'; // 🏠 Écran principal
+import 'screens/sandbox_main_screen.dart'; // 🏠 Nouvel écran principal (design premium)
 import 'screens/current_week_list_screen.dart'; // 📅 Liste des repas de la semaine actuelle
 import 'screens/next_week_list_screen.dart'; // 🔮 Liste des repas de la semaine suivante
 import 'package:firebase_core/firebase_core.dart'; // 🔥 Nécessaire pour utiliser Firebase
 import 'package:firebase_app_check/firebase_app_check.dart'; // 🛡️ Sécurisation via App Check
 import 'package:dinners_app/utils/date_format.dart'; // 🕒 Formatage personnalisé des dates
+
+import 'providers/auth_provider.dart';
+import 'screens/auth_screen.dart';
+import 'screens/email_verification_screen.dart';
 
 void main() async {
   // 🔧 Préparation des widgets Flutter avant toute opération asynchrone
@@ -30,23 +34,22 @@ void main() async {
 
   // 🗓️ Génération de la clé de semaine en cours (utile pour l'organisation des repas)
   final weekKey = getWeekKey(DateTime.now());
-  print("✅ Correct weekKey: $weekKey"); // 🖨️ Affichage dans la console pour vérification
-
-  // 🍽️ Instanciation du provider pour la gestion des repas
-  final mealProvider = MealProvider();
-
-  // 🚀 Préchargement des repas (optimise les performances et évite les chargements lents)
-  await mealProvider.preloadAllMeals();
-
-  // 🔄 Synchronisation des données avec Firestore en temps réel
-  mealProvider.startLiveSync();
+  debugPrint("✅ Correct weekKey: $weekKey");
 
   // 🧠 Intégration des providers à toute l'application Flutter
+  // NOTE: Preload et liveSync sont délégués aux providers lorsque updateGroupId est appelé par AuthProvider
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: mealProvider),
-        ChangeNotifierProvider(create: (_) => RecipeProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, MealProvider>(
+          create: (_) => MealProvider(),
+          update: (_, auth, meal) => meal!..updateGroupId(auth.currentGroupId),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, RecipeProvider>(
+          create: (_) => RecipeProvider(),
+          update: (_, auth, recipe) => recipe!..updateGroupId(auth.currentGroupId),
+        ),
       ],
       child: const MyApp(), // 🏁 Lancement de l'application
     ),
@@ -58,18 +61,28 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Transition slide propre (style iOS) — élimine l'effet "rétrécissement"
+    // du predictive back de Material 3 sur Android
+    const pageTransition = PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      },
+    );
+
     return MaterialApp(
-      title: 'Dinners App',
+      title: "C'est la course",
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primaryOrange),
         scaffoldBackgroundColor: AppColors.background,
+        pageTransitionsTheme: pageTransition,
         textTheme: GoogleFonts.poppinsTextTheme(
           Theme.of(context).textTheme,
         ),
       ),
-      home: const MainScreen(),
+      home: const AuthWrapper(),
       onGenerateRoute: (settings) {
         if (settings.name == '/week' && settings.arguments is DateTime) {
           return MaterialPageRoute(
@@ -92,6 +105,35 @@ class MyApp extends StatelessWidget {
           );
         }
         return null;
+      },
+    );
+  }
+}
+
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (auth.isLoading) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (auth.authUser == null) {
+          return const AuthScreen();
+        }
+        // ✅ Les comptes Google sont toujours vérifiés côté provider,
+        // pas besoin de vérifier l'email pour eux.
+        final isGoogleUser = auth.authUser!.providerData
+            .any((p) => p.providerId == 'google.com');
+        if (!auth.authUser!.emailVerified && !isGoogleUser) {
+          return const EmailVerificationScreen();
+        }
+        return const SandboxMainScreen();
       },
     );
   }
