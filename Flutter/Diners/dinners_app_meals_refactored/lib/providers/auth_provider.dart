@@ -23,6 +23,8 @@ class AuthProvider extends ChangeNotifier {
 
   // Subscription au stream du groupe courant (temps réel)
   StreamSubscription<DocumentSnapshot>? _groupStreamSub;
+  // Subscription au stream du profil utilisateur (temps réel)
+  StreamSubscription<DocumentSnapshot>? _userStreamSub;
 
   User? get authUser => _authUser;
   UserModel? get userProfile => _userProfile;
@@ -48,6 +50,7 @@ class AuthProvider extends ChangeNotifier {
         await _loadUserProfile(user.uid);
       } else {
         _cancelGroupStream();
+        _cancelUserStream();
         _userProfile = null;
         _currentGroup = null;
         _isLoading = false;
@@ -76,6 +79,7 @@ class AuthProvider extends ChangeNotifier {
 
       if (doc.exists) {
         _userProfile = UserModel.fromMap(doc.data()!, doc.id);
+        _startUserStream(uid); // Abonnement temps réel au profil utilisateur
         await _loadCurrentGroup();
       }
     } catch (e) {
@@ -126,6 +130,33 @@ class AuthProvider extends ChangeNotifier {
   void _cancelGroupStream() {
     _groupStreamSub?.cancel();
     _groupStreamSub = null;
+  }
+
+  void _startUserStream(String uid) {
+    _userStreamSub?.cancel();
+    _userStreamSub = _firestore
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        final newUserProfile = UserModel.fromMap(snapshot.data()!, snapshot.id);
+        bool currentGroupChanged = _userProfile?.currentGroupId != newUserProfile.currentGroupId;
+        
+        _userProfile = newUserProfile;
+
+        if (currentGroupChanged && newUserProfile.currentGroupId.isNotEmpty) {
+          _loadCurrentGroup(); // Will call notifyListeners
+        } else {
+          notifyListeners();
+        }
+      }
+    });
+  }
+
+  void _cancelUserStream() {
+    _userStreamSub?.cancel();
+    _userStreamSub = null;
   }
 
   /// Gère le cas où le groupe courant n'existe plus (supprimé par l'admin).
@@ -508,6 +539,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _cancelGroupStream();
+    _cancelUserStream();
     super.dispose();
   }
 }

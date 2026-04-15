@@ -111,6 +111,47 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
+  Future<void> _deleteRecipe() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Supprimer la recette ?',
+            style: AppTheme.titleMedium),
+        content: Text(
+          'Cette action est irréversible. La recette sera définitivement supprimée.',
+          style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Annuler',
+                style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: Text('Supprimer', style: AppTheme.bodyText.copyWith(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      Provider.of<RecipeProvider>(context, listen: false)
+          .deleteRecipe(widget.recipeToEdit!.id);
+      // Remonter à la liste des recettes (2 pages : detail écran + edit écran)
+      Navigator.of(context).pop(); // ferme l'écran d'édition
+      Navigator.of(context).pop(); // ferme l'écran de détail si présent
+    }
+  }
+
   /// Lance l'analyse Gemini : photos → IA → JSON → pré-remplissage des champs
   Future<void> _scanRecipeFromPhoto() async {
     // Affiche le choix : appareil photo ou galerie (multi-sélection)
@@ -275,6 +316,29 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: Text(isEditing ? 'Modifier la recette' : 'Nouvelle recette', style: AppTheme.titleMedium),
         actions: [
+          if (isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Tooltip(
+                message: 'Supprimer la recette',
+                child: InkWell(
+                  onTap: _deleteRecipe,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.delete_outline_rounded,
+                      color: Colors.red.shade500,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (!isEditing)
             Padding(
               padding: const EdgeInsets.only(right: 12),

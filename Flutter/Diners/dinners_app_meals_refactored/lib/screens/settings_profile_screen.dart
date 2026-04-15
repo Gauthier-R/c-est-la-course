@@ -292,11 +292,21 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final user = auth.userProfile;
     final group = auth.currentGroup;
-    final isOwner = group?.createdBy == user?.uid;
 
     if (user == null) {
       return const Scaffold(
           body: Center(child: CircularProgressIndicator()));
+    }
+
+    final isOwner = group?.createdBy == user.uid;
+
+    // Si on a des groupes dans le profil qui ne sont pas dans le cache, on recharge
+    final hasMissingGroupNames =
+        user.groupIds.any((id) => !_groupIdToName.containsKey(id));
+    if (hasMissingGroupNames && !_isLoadingGroupNames) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadGroupNames();
+      });
     }
 
     return Scaffold(
