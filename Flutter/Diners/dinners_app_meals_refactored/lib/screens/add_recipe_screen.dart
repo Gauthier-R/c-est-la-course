@@ -111,21 +111,96 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
-  /// Lance l'analyse Gemini : photo → IA → JSON → pré-remplissage des champs
+  /// Lance l'analyse Gemini : photos → IA → JSON → pré-remplissage des champs
   Future<void> _scanRecipeFromPhoto() async {
+    // Affiche le choix : appareil photo ou galerie (multi-sélection)
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  'Scanner une recette papier',
+                  style: AppTheme.titleMedium.copyWith(fontSize: 16),
+                ),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_outlined,
+                      color: AppColors.primaryGreen, size: 22),
+                ),
+                title: Text('Prendre une photo', style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600)),
+                subtitle: Text('Utiliser l\'appareil photo', style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryOrange.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_outlined,
+                      color: AppColors.primaryOrange, size: 22),
+                ),
+                title: Text('Choisir depuis la galerie', style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600)),
+                subtitle: Text('Sélectionner une ou plusieurs photos', style: AppTheme.bodyText.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == null || !mounted) return;
+
+    List<File> imageFiles = [];
+
     try {
-      final pickedFile = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-        maxWidth: 1600,
-        maxHeight: 2000,
-      );
-      if (pickedFile == null || !mounted) return;
+      if (choice == 'camera') {
+        final pickedFile = await ImagePicker().pickImage(
+          source: ImageSource.camera,
+          imageQuality: 85,
+          maxWidth: 1600,
+          maxHeight: 2000,
+        );
+        if (pickedFile == null || !mounted) return;
+        imageFiles = [File(pickedFile.path)];
+      } else {
+        final pickedFiles = await ImagePicker().pickMultiImage(
+          imageQuality: 85,
+          maxWidth: 1600,
+          maxHeight: 2000,
+        );
+        if (pickedFiles.isEmpty || !mounted) return;
+        imageFiles = pickedFiles.map((f) => File(f.path)).toList();
+      }
 
       setState(() => _isScanning = true);
 
-      // On envoie directement l'image à Gemini
-      final result = await RecipeOcrService.analyze(File(pickedFile.path));
+      final result = await RecipeOcrService.analyze(imageFiles);
 
       if (!mounted) return;
       setState(() {
@@ -145,11 +220,12 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       });
 
       final good = result.detectedFields >= 2;
+      final photoCount = imageFiles.length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             good
-                ? '✅ Magie ! La recette a été scannée et analysée.'
+                ? '✅ Magie ! ${photoCount > 1 ? "$photoCount photos analysées" : "La recette a été scannée"} et pré-remplie.'
                 : '⚠️ L\'IA n\'a pas tout trouvé. Complétez manuellement.',
           ),
           backgroundColor: good ? AppColors.primaryGreen : Colors.orange.shade700,

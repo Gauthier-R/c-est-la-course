@@ -26,8 +26,11 @@ class RecipeOcrService {
   // Firebase Remote Config, ou via des variables d'environnement.
   static const String _apiKey = 'AIzaSyDKvoEuk51QOhgEi_gp_tjHGz_fXHQDY_k';
 
-  /// Analyse une image via Gemini et retourne les données structurées.
-  static Future<OcrRecipeResult> analyze(File imageFile) async {
+  /// Analyse une ou plusieurs images via Gemini et retourne les données structurées.
+  /// Si plusieurs images sont passées, l'IA les traite comme les pages d'une même recette.
+  static Future<OcrRecipeResult> analyze(List<File> imageFiles) async {
+    if (imageFiles.isEmpty) return const OcrRecipeResult();
+
     final model = GenerativeModel(
       model: 'gemini-2.5-flash',
       apiKey: _apiKey,
@@ -36,8 +39,14 @@ class RecipeOcrService {
       ),
     );
 
+    final introPrompt = imageFiles.length > 1
+        ? 'Tu reçois ${imageFiles.length} images qui sont les différentes pages ou parties d\'une même recette de cuisine (souvent manuscrite). Analyse-les toutes ensemble pour reconstituer la recette complète.'
+        : 'Tu reçois une image d\'une recette de cuisine (souvent manuscrite). Analyse-la attentivement.';
+
     final prompt = '''
-Tu es un assistant culinaire expert. Ton but est de lire attentivement cette image de recette de cuisine (souvent manuscrite) et d'en extraire les informations de manière très précise.
+$introPrompt
+
+Tu es un assistant culinaire expert. Ton but est de lire attentivement ces images et d'en extraire les informations de manière très précise.
 
 Tu dois impérativement retourner un objet JSON avec la structure exacte suivante :
 {
@@ -58,14 +67,14 @@ Assure-toi que la liste `ingredients` retranscrive bien tout ce qui est détect�
 ''';
 
     try {
-      final imageBytes = await imageFile.readAsBytes();
-      final content = [
-        Content.multi([
-          TextPart(prompt),
-          DataPart('image/jpeg', imageBytes),
-        ])
-      ];
+      // Construct multi-part content with all images
+      final parts = <Part>[TextPart(prompt)];
+      for (final imageFile in imageFiles) {
+        final imageBytes = await imageFile.readAsBytes();
+        parts.add(DataPart('image/jpeg', imageBytes));
+      }
 
+      final content = [Content.multi(parts)];
       final response = await model.generateContent(content);
       return _parseJsonResponse(response.text ?? '{}');
     } catch (e) {

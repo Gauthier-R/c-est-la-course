@@ -149,6 +149,7 @@ class AuthProvider extends ChangeNotifier {
       currentGroupId: newCurrentGroupId,
       groupIds: newGroupIds,
       photoBase64: _userProfile!.photoBase64,
+      primaryGroupId: _userProfile!.primaryGroupId,
     );
     _currentGroup = null;
 
@@ -252,6 +253,7 @@ class AuthProvider extends ChangeNotifier {
       'name': name,
       'currentGroupId': groupDoc.id,
       'groupIds': [groupDoc.id],
+      'primaryGroupId': groupDoc.id, // Groupe par défaut, ne peut pas être supprimé
     };
     await _firestore.collection('users').doc(user.uid).set(userMap);
   }
@@ -271,6 +273,7 @@ class AuthProvider extends ChangeNotifier {
       currentGroupId: groupId,
       groupIds: _userProfile!.groupIds,
       photoBase64: _userProfile!.photoBase64,
+      primaryGroupId: _userProfile!.primaryGroupId,
     );
     _currentGroup = null;
     notifyListeners();
@@ -391,6 +394,11 @@ class AuthProvider extends ChangeNotifier {
   Future<void> removeGroup(String groupId) async {
     if (_userProfile == null) return;
 
+    // Protection : le groupe principal ne peut pas être supprimé ou quitté
+    if (groupId == _userProfile!.primaryGroupId) {
+      throw Exception('Votre groupe famille principal ne peut pas être supprimé.');
+    }
+
     if (_userProfile!.groupIds.length <= 1) {
       throw Exception('Vous devez avoir au moins un groupe actif.');
     }
@@ -461,6 +469,7 @@ class AuthProvider extends ChangeNotifier {
         currentGroupId: _userProfile!.currentGroupId,
         groupIds: _userProfile!.groupIds,
         photoBase64: _userProfile!.photoBase64,
+        primaryGroupId: _userProfile!.primaryGroupId,
       );
     }
     notifyListeners();
@@ -480,6 +489,7 @@ class AuthProvider extends ChangeNotifier {
         currentGroupId: _userProfile!.currentGroupId,
         groupIds: _userProfile!.groupIds,
         photoBase64: base64,
+        primaryGroupId: _userProfile!.primaryGroupId,
       );
     }
     notifyListeners();

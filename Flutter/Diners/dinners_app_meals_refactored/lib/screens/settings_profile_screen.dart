@@ -573,7 +573,7 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
                       textCapitalization: TextCapitalization.characters,
                       style: GoogleFonts.poppins(fontSize: 14),
                       decoration: InputDecoration(
-                        hintText: 'Code d\'invitation (ex. A1B2C3)',
+                        hintText: 'Code d\'invitation',
                         hintStyle: GoogleFonts.poppins(
                             color: AppColors.textSecondary, fontSize: 13),
                         filled: true,
@@ -669,6 +669,8 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
       );
     }
 
+    final isPrimaryGroup = group.id == user.primaryGroupId;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -677,51 +679,107 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
       ),
       child: Column(
         children: [
-          ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            leading: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primaryGreen.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.family_restroom_rounded,
-                  color: AppColors.primaryGreen, size: 22),
-            ),
-            title: Text(group.name,
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-            subtitle: Text(
-              '${group.members.length} membre${group.members.length > 1 ? 's' : ''}',
-              style: GoogleFonts.poppins(
-                  color: AppColors.textSecondary, fontSize: 12),
-            ),
-            trailing: isOwner
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
+          // ── EN-TÊTE : icône | nom + badge | bouton(s)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            child: Row(
+              children: [
+                // Icône famille
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.family_restroom_rounded,
+                      color: AppColors.primaryGreen, size: 22),
+                ),
+                const SizedBox(width: 12),
+                // Nom + badge + membres — prend tout l'espace disponible
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_rounded,
-                            size: 20, color: AppColors.textSecondary),
-                        onPressed: () => _renameGroup(group.name),
-                        tooltip: 'Renommer',
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              group.name,
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600, fontSize: 15),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isPrimaryGroup) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryGreen
+                                    .withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Principale',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryGreen,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline_rounded,
-                            size: 20, color: Colors.red.shade400),
-                        onPressed: () =>
-                            _deleteOrLeaveGroup(group, user.uid),
-                        tooltip: 'Supprimer',
+                      const SizedBox(height: 2),
+                      Text(
+                        '${group.members.length} membre${group.members.length > 1 ? 's' : ''}',
+                        style: GoogleFonts.poppins(
+                            color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
-                  )
-                : IconButton(
+                  ),
+                ),
+                // Bouton(s) d'action
+                if (isOwner)
+                  if (isPrimaryGroup)
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded,
+                          size: 20, color: AppColors.textSecondary),
+                      onPressed: () => _renameGroup(group.name),
+                      tooltip: 'Renommer',
+                    )
+                  else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded,
+                              size: 20, color: AppColors.textSecondary),
+                          onPressed: () => _renameGroup(group.name),
+                          tooltip: 'Renommer',
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline_rounded,
+                              size: 20, color: Colors.red.shade400),
+                          onPressed: () =>
+                              _deleteOrLeaveGroup(group, user.uid),
+                          tooltip: 'Supprimer',
+                        ),
+                      ],
+                    )
+                else if (!isPrimaryGroup)
+                  IconButton(
                     icon: Icon(Icons.exit_to_app_rounded,
                         size: 20, color: Colors.red.shade400),
                     onPressed: () => _deleteOrLeaveGroup(group, user.uid),
                     tooltip: 'Quitter',
                   ),
+              ],
+            ),
           ),
           Divider(height: 1, color: Colors.grey.shade100),
           // Code d'invitation avec copie
@@ -763,6 +821,7 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
     );
   }
 }
+
 
 // ── MEMBRES EN TEMPS RÉEL ──────────────────────────────────────────
 
