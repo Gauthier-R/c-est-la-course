@@ -11,6 +11,8 @@ class Recipe {
   final String? imageBase64;
   final List<Map<String, dynamic>> ingredients; // {name, quantity, unit}
 
+  final DateTime createdAt;
+
   // Cache lazy pour l'image décodée
   Uint8List? _cachedBytes;
   bool _decoded = false;
@@ -36,9 +38,26 @@ class Recipe {
     required this.description,
     this.imageBase64,
     required this.ingredients,
-  });
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 
   factory Recipe.fromMap(String id, Map<String, dynamic> map) {
+    DateTime parsedDate;
+    if (map['createdAt'] != null) {
+      // Handle both Timestamp and string (if previously saved differently)
+      if (map['createdAt'] is String) {
+        parsedDate = DateTime.tryParse(map['createdAt']) ?? DateTime.now();
+      } else {
+        try {
+          parsedDate = (map['createdAt']).toDate();
+        } catch (_) {
+          parsedDate = DateTime.now();
+        }
+      }
+    } else {
+      parsedDate = DateTime.now();
+    }
+
     return Recipe(
       id: id,
       name: map['name'] ?? '',
@@ -48,6 +67,7 @@ class Recipe {
       description: map['description'] ?? '',
       imageBase64: map['imageBase64'] as String?,
       ingredients: List<Map<String, dynamic>>.from(map['ingredients'] ?? []),
+      createdAt: parsedDate,
     );
   }
 
@@ -60,6 +80,7 @@ class Recipe {
       'description': description,
       if (imageBase64 != null) 'imageBase64': imageBase64,
       'ingredients': ingredients,
+      'createdAt': createdAt.toIso8601String(),
     };
   }
 }

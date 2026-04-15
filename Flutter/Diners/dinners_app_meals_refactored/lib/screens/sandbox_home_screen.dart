@@ -53,38 +53,40 @@ class _PremiumMealCard extends StatelessWidget {
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (_isToday)
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryOrange,
-                        borderRadius: BorderRadius.circular(12),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryOrange,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text("Aujourd'hui", style: AppTheme.labelSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
                       ),
-                      child: Text("Aujourd'hui", style: AppTheme.labelSmall.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
-                  Expanded(
-                    child: Text(
-                      formattedDay,
-                      style: AppTheme.titleMedium.copyWith(
-                        fontSize: 15,
-                        color: _isToday ? AppColors.primaryOrange : AppColors.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    formattedDay,
+                    style: AppTheme.titleMedium.copyWith(
+                      fontSize: 14,
+                      color: _isToday ? AppColors.primaryOrange : AppColors.textPrimary,
                     ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
               // Midi
               _buildMealRow(context, Icons.wb_sunny, AppColors.secondaryYellow, 'Déjeuner', lunch),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               // Soir
               _buildMealRow(context, Icons.nightlight_round, AppColors.primaryGreen, 'Dîner', dinner),
             ],
@@ -184,7 +186,7 @@ class _PremiumMealCarouselState extends State<_PremiumMealCarousel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              height: 180,
+              height: 200,
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: 15,

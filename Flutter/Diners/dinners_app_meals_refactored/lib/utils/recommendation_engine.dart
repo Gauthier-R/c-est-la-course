@@ -50,16 +50,37 @@ class MealRecommendationEngine {
     return 1.0; // saison adjacente
   }
 
-  // ─── Score fréquence (0..3) — moins cuisiné = score plus élevé ───────────
-  static double _frequencyScore(Recipe recipe, Map<String, int> cookCount) {
-    final count = cookCount[recipe.name.toLowerCase().trim()] ?? 0;
-    if (count == 0) return 3.0;
-    if (count == 1) return 2.5;
-    if (count == 2) return 2.0;
-    if (count <= 4) return 1.5;
-    if (count <= 7) return 1.0;
-    if (count <= 10) return 0.5;
+  // ─── Score Nouveauté (0..1) ───────────────────────────────────────────────
+  static double _noveltyScore(Recipe recipe) {
+    if (recipe.createdAt == null) return 0.0;
+    final daysSinceCreation = DateTime.now().difference(recipe.createdAt!).inDays;
+    if (daysSinceCreation < 14) return 1.0; // Bonus léger pour les recettes très récentes
+    if (daysSinceCreation < 30) return 0.5;
     return 0.0;
+  }
+
+  // ─── Score popularité (0..0.5) ───────────────────────────────────────────
+  static double _popularityScore(int count) {
+    if (count >= 10) return 0.5; // Grand classique
+    if (count >= 5)  return 0.3; // Plat régulier
+    if (count >= 2)  return 0.1; // Apprécié
+    return 0.0;
+  }
+
+  // ─── Score récence (-5..3.5) — moins récemment = score plus élevé ─────────
+  static double _recencyScore(Recipe recipe, Map<String, dynamic> historyEntry) {
+    final lastCooked = historyEntry['lastDate'] as DateTime?;
+    if (lastCooked == null) return 3.5; // Jamais fait, ou très vieux : score max
+
+    final daysSinceLastCook = DateTime.now().difference(lastCooked).inDays;
+    
+    // Fait dans le futur ou aujourd'hui/hier : on pénalise lourdement
+    if (daysSinceLastCook < 4) return -5.0; 
+    if (daysSinceLastCook < 7) return 0.0;
+    if (daysSinceLastCook < 14) return 1.0;
+    if (daysSinceLastCook < 30) return 2.0;
+    
+    return 3.5; // Fait il y a plus d'un mois : on relance la proposition
   }
 
   // ─── Score temps de préparation (0..2) ────────────────────────────────────
@@ -75,11 +96,24 @@ class MealRecommendationEngine {
   }
 
   // ─── Raison humaine ───────────────────────────────────────────────────────
-  static String _buildReason(Recipe recipe, Map<String, int> cookCount) {
+  static String _buildReason(Recipe recipe, Map<String, dynamic> historyEntry) {
     final parts = <String>[];
-    final count = cookCount[recipe.name.toLowerCase().trim()] ?? 0;
-    if (count == 0) parts.add('Jamais préparé');
-    else if (count <= 2) parts.add('Peu préparé');
+    final lastCooked = historyEntry['lastDate'] as DateTime?;
+    final count = historyEntry['count'] as int? ?? 0;
+    
+    if (lastCooked == null) {
+      if (recipe.createdAt != null && DateTime.now().difference(recipe.createdAt!).inDays < 14) {
+         parts.add('Nouvelle recette');
+      } else {
+         parts.add('À redécouvrir');
+      }
+    } else {
+      if (count >= 10) parts.add('Grand classique');
+      else {
+        final daysSince = DateTime.now().difference(lastCooked).inDays;
+        if (daysSince > 45) parts.add('Pas mangé depuis un moment');
+      }
+    }
 
     final season = _normalizeSeason(recipe.season);
     if (season == getCurrentSeason()) parts.add('De saison');
@@ -93,18 +127,37 @@ class MealRecommendationEngine {
     return parts.isEmpty ? 'Recommandé' : parts.take(2).join(' · ');
   }
 
-  // ─── Compte les occurrences dans l'historique ─────────────────────────────
-  static Map<String, int> buildCookCount(Map<String, Map<String, dynamic>> cachedMeals) {
-    final Map<String, int> count = {};
-    for (final dayData in cachedMeals.values) {
-      for (final moment in ['midi', 'soir']) {
-        final mealName = (dayData[moment]?['meal'] as String? ?? '').toLowerCase().trim();
-        if (mealName.isNotEmpty) {
-          count[mealName] = (count[mealName] ?? 0) + 1;
-        }
+  // ─── Trouve la date la plus récente et le nombre de fois planifiée ────────
+  static Map<String, Map<String, dynamic>> buildRecipeHistory(Map<String, Map<String, dynamic>> cachedMeals) {
+    final Map<String, Map<String, dynamic>> history = {};
+    final sixMonthsAgo = DateTime.now().subtract(const Duration(days: 180));
+    
+    for (final dateKey in cachedMeals.keys) {
+      if (dateKey.startsWith('20') && !dateKey.contains('W')) {
+        try {
+          final DateTime mealDate = DateTime.parse(dateKey);
+          final dayData = cachedMeals[dateKey]!;
+          
+          for (final moment in ['midi', 'soir']) {
+            final mealName = (dayData[moment]?['meal'] as String? ?? '').toLowerCase().trim();
+            if (mealName.isNotEmpty) {
+              final entry = history.putIfAbsent(mealName, () => {'lastDate': null, 'count': 0});
+              
+              // On ne compte pour le bonus que si c'est récent (6 mois)
+              if (mealDate.isAfter(sixMonthsAgo)) {
+                entry['count'] = (entry['count'] as int) + 1;
+              }
+              
+              final existingDate = entry['lastDate'] as DateTime?;
+              if (existingDate == null || mealDate.isAfter(existingDate)) {
+                entry['lastDate'] = mealDate;
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
-    return count;
+    return history;
   }
 
   // ─── Point d'entrée principal ─────────────────────────────────────────────
@@ -112,20 +165,31 @@ class MealRecommendationEngine {
   /// [isWeekend] indique si on recommande pour un repas de week-end.
   static List<RecipeScore> recommend({
     required List<Recipe> recipes,
-    required Map<String, int> cookCount,
+    required Map<String, Map<String, dynamic>> recipeHistory,
     required String type, // 'Plat', 'Entrée', 'Dessert'
     bool isWeekend = false,
     int topN = 6,
   }) {
     final filtered = recipes.where((r) => r.type == type).toList();
     final scored = filtered.map((recipe) {
-      final score = _seasonScore(recipe)
-          + _frequencyScore(recipe, cookCount)
+      final name = recipe.name.toLowerCase().trim();
+      final historyEntry = recipeHistory[name] ?? {'lastDate': null, 'count': 0};
+      
+      // Calcul du score de base
+      double baseScore = _seasonScore(recipe)
+          + _recencyScore(recipe, historyEntry)
+          + _noveltyScore(recipe)
+          + _popularityScore(historyEntry['count'] as int? ?? 0)
           + _prepTimeScore(recipe, isWeekend: isWeekend);
+          
+      // Ajout d'une très légère variance aléatoire (0.0 à 0.3) 
+      final randomVariance = (DateTime.now().millisecond % 30) / 100.0;
+      final finalScore = baseScore + randomVariance;
+
       return RecipeScore(
         recipe: recipe,
-        score: score,
-        reason: _buildReason(recipe, cookCount),
+        score: finalScore,
+        reason: _buildReason(recipe, historyEntry),
       );
     }).toList();
 

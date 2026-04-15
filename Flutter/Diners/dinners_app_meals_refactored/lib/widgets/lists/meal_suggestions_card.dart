@@ -16,7 +16,6 @@ import '../../utils/recommendation_engine.dart';
 
 // ─── Constantes ────────────────────────────────────────────────────────────
 const int _kPageSize   = 5;
-const int _kEnginePool = 25;
 
 class MealSuggestionsCard extends StatefulWidget {
   const MealSuggestionsCard({super.key});
@@ -90,12 +89,17 @@ class _MealSuggestionsCardState extends State<MealSuggestionsCard>
   Widget build(BuildContext context) {
     final recipes  = context.watch<RecipeProvider>().recipes;
     final meals    = context.watch<MealProvider>();
-    final cookCount= MealRecommendationEngine.buildCookCount(meals.cachedMeals);
+    final recipeHistory = MealRecommendationEngine.buildRecipeHistory(meals.cachedMeals);
     final isWE     = _selectedTab == 1;
 
-    final platAll   = MealRecommendationEngine.recommend(recipes: recipes, cookCount: cookCount, type: 'Plat',    isWeekend: isWE, topN: _kEnginePool);
-    final entreeAll = MealRecommendationEngine.recommend(recipes: recipes, cookCount: cookCount, type: 'Entrée',  isWeekend: isWE, topN: _kEnginePool);
-    final dessAll   = MealRecommendationEngine.recommend(recipes: recipes, cookCount: cookCount, type: 'Dessert', isWeekend: isWE, topN: _kEnginePool);
+    // Utilisation de la longueur totale de recettes par type pour permettre une rotation complète
+    final platCount = recipes.where((r) => r.type == 'Plat').length;
+    final entreeCount = recipes.where((r) => r.type == 'Entrée').length;
+    final dessCount = recipes.where((r) => r.type == 'Dessert').length;
+
+    final platAll   = MealRecommendationEngine.recommend(recipes: recipes, recipeHistory: recipeHistory, type: 'Plat',    isWeekend: isWE, topN: platCount > 0 ? platCount : 1);
+    final entreeAll = MealRecommendationEngine.recommend(recipes: recipes, recipeHistory: recipeHistory, type: 'Entrée',  isWeekend: isWE, topN: entreeCount > 0 ? entreeCount : 1);
+    final dessAll   = MealRecommendationEngine.recommend(recipes: recipes, recipeHistory: recipeHistory, type: 'Dessert', isWeekend: isWE, topN: dessCount > 0 ? dessCount : 1);
 
     final plats    = _page(platAll,   _platOffset);
     final entrees  = _page(entreeAll, _entreeOffset);
@@ -336,12 +340,12 @@ class _RecipeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(r.name,
-                    style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700, fontSize: 13, height: 1.2),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                    style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w700, fontSize: 13, height: 1.1),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
                   Text(scored.reason,
-                    style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary, fontSize: 10),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary, fontSize: 9, height: 1.1),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 5),
                   Row(children: [
                     Icon(_timeIcon(r.time), size: 11, color: _timeColor(r.time)),
