@@ -244,21 +244,35 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       final result = await RecipeOcrService.analyze(imageFiles);
 
       if (!mounted) return;
+
+      // Construire le résumé des champs détectés pour le feedback
+      final detectedInfo = <String>[];
+
       setState(() {
         _isScanning = false;
         if (result.name != null && _nameCtrl.text.isEmpty) {
           _nameCtrl.text = result.name!;
+          detectedInfo.add('nom');
         }
         if (result.description != null && _descriptionCtrl.text.isEmpty) {
           _descriptionCtrl.text = result.description!;
+          detectedInfo.add('étapes');
         }
-        if (result.time != null) {
+        if (result.time != null && _times.contains(result.time)) {
           _time = result.time!;
+          detectedInfo.add('temps');
+        }
+        if (result.type != null && _types.contains(result.type)) {
+          _type = result.type!;
+          detectedInfo.add('type');
         }
         if (result.ingredients.isNotEmpty) {
           _ingredients.addAll(result.ingredients);
+          detectedInfo.add('${result.ingredients.length} ingrédient(s)');
         }
       });
+
+      debugPrint('📋 OCR: Champs remplis: ${detectedInfo.join(", ")}');
 
       final good = result.detectedFields >= 2;
       final photoCount = imageFiles.length;
@@ -266,18 +280,25 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         SnackBar(
           content: Text(
             good
-                ? '✅ Magie ! ${photoCount > 1 ? "$photoCount photos analysées" : "La recette a été scannée"} et pré-remplie.'
-                : '⚠️ L\'IA n\'a pas tout trouvé. Complétez manuellement.',
+                ? '✅ ${photoCount > 1 ? "$photoCount photos analysées" : "Recette scannée"} ! Détecté : ${detectedInfo.join(", ")}.'
+                : detectedInfo.isNotEmpty
+                    ? '⚠️ Partiellement détecté (${detectedInfo.join(", ")}). Complétez le reste.'
+                    : '⚠️ L\'IA n\'a rien pu lire. Essayez avec une photo mieux cadrée ou plus nette.',
           ),
-          backgroundColor: good ? AppColors.primaryGreen : Colors.orange.shade700,
+          backgroundColor: good
+              ? AppColors.primaryGreen
+              : detectedInfo.isNotEmpty
+                  ? Colors.orange.shade700
+                  : Colors.red.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 5),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isScanning = false);
+      debugPrint('❌ Scan: Erreur complète: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Erreur lors de l\'analyse : $e'),
