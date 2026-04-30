@@ -42,12 +42,22 @@ dependencies:
   firebase_core: ^3.13.0
   cloud_firestore: ^5.6.6
   firebase_auth: ^5.5.2
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
   firebase_app_check: ^0.3.2+10
   image_picker: ^1.2.1
   image: ^4.8.0
   uuid: ^4.5.3
   google_sign_in: 6.2.1
   google_generative_ai: ^0.4.6 # Parsing intelligent des recettes via Gemini
+<<<<<<< Updated upstream
+=======
+  url_launcher: ^6.3.2
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 
 dev_dependencies:
   flutter_test:

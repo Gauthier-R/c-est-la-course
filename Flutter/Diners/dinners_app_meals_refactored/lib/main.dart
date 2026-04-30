@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // 🌐 Nécessaire pour kIsWeb
 import 'package:flutter/material.dart'; // 📱 Base pour toute application Flutter
 import 'package:google_fonts/google_fonts.dart'; // 🔤 Utilisation de polices Google personnalisées
 import 'utils/app_colors.dart'; // 🎨 Fichier perso pour les couleurs de l'app
@@ -11,6 +12,7 @@ import 'screens/sandbox_main_screen.dart'; // 🏠 Nouvel écran principal (desi
 import 'screens/current_week_list_screen.dart'; // 📅 Liste des repas de la semaine actuelle
 import 'screens/next_week_list_screen.dart'; // 🔮 Liste des repas de la semaine suivante
 import 'package:firebase_core/firebase_core.dart'; // 🔥 Nécessaire pour utiliser Firebase
+import 'firebase_options.dart'; // Configuration Firebase générée par FlutterFire
 import 'package:firebase_app_check/firebase_app_check.dart'; // 🛡️ Sécurisation via App Check
 import 'package:dinners_app/utils/date_format.dart'; // 🕒 Formatage personnalisé des dates
 
@@ -25,12 +27,28 @@ void main() async {
   await initializeDateFormatting('fr_FR', null);
 
   // 🔥 Initialisation de Firebase pour activer tous les services (Firestore, Auth, etc.)
+<<<<<<< Updated upstream
   await Firebase.initializeApp();
 
   // 🛡️ Activation de App Check en mode Debug (utile pour éviter les blocages en dev)
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug, // ✅ On utilise le fournisseur debug car l'app n'est pas publiée
+<<<<<<< Updated upstream
+=======
+    isTokenAutoRefreshEnabled: true, // 🔄 Firebase régénère automatiquement le jeton toutes les 30 min
+=======
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
   );
+
+  // 🛡️ Activation de App Check en mode Debug (uniquement sur mobile pour l'instant)
+  if (!kIsWeb) {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.debug, // ✅ On utilise le fournisseur debug car l'app n'est pas publiée
+    );
+  }
 
   // 🗓️ Génération de la clé de semaine en cours (utile pour l'organisation des repas)
   final weekKey = getWeekKey(DateTime.now());
@@ -82,7 +100,40 @@ class MyApp extends StatelessWidget {
           Theme.of(context).textTheme,
         ),
       ),
+<<<<<<< Updated upstream
       home: const AuthWrapper(),
+=======
+<<<<<<< Updated upstream
+      home: const MainScreen(),
+=======
+      builder: (context, child) {
+        if (kIsWeb) {
+          return Container(
+            color: Colors.grey[900], // Fond sombre autour de l'app sur grand écran
+            child: Center(
+              child: ClipRect(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 450), // Largeur max type smartphone
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 20,
+                      ),
+                    ],
+                  ),
+                  child: child!,
+                ),
+              ),
+            ),
+          );
+        }
+        return child!;
+      },
+      home: const AuthWrapper(),
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
       onGenerateRoute: (settings) {
         if (settings.name == '/week' && settings.arguments is DateTime) {
           return MaterialPageRoute(
