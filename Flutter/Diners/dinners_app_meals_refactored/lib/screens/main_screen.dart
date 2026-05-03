@@ -1,26 +1,26 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../utils/app_colors.dart';
-import 'sandbox_home_screen.dart';
-import 'sandbox_calendar_screen.dart';
-import 'sandbox_shopping_screen.dart';
-import '../widgets/recipes/sandbox_recipes_screen.dart';
+import 'home_screen.dart';
+import 'calendar_screen.dart';
+import 'shopping_list_screen.dart';
+import 'recipes_screen.dart';
 
-class SandboxMainScreen extends StatefulWidget {
-  const SandboxMainScreen({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<SandboxMainScreen> createState() => _SandboxMainScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _SandboxMainScreenState extends State<SandboxMainScreen> {
+class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   
   final List<Widget> _pages = const [
-    SandboxHomeScreen(),
-    SandboxCalendarScreen(),
-    SandboxShoppingScreen(),
-    SandboxRecipesScreen(isNested: true), // Onglet Recettes
+    HomeScreen(),
+    CalendarScreen(),
+    ShoppingListScreen(),
+    RecipesScreen(isNested: true), // Onglet Recettes
   ];
 
   @override

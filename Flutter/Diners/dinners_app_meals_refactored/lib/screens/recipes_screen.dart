@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../utils/app_colors.dart';
-import '../../utils/app_theme.dart';
-import '../../providers/recipe_provider.dart';
-import 'recipes_card_new.dart';
-import '../../screens/add_recipe_screen.dart';
-import '../../screens/recipe_detail_screen.dart';
+import '../utils/app_colors.dart';
+import '../utils/app_theme.dart';
+import '../providers/recipe_provider.dart';
+import '../widgets/recipes/recipes_card_new.dart';
+import 'add_recipe_screen.dart';
+import 'recipe_detail_screen.dart';
 
-class SandboxRecipesScreen extends StatefulWidget {
+class RecipesScreen extends StatefulWidget {
   final bool isNested;
-  const SandboxRecipesScreen({super.key, this.isNested = false});
+  const RecipesScreen({super.key, this.isNested = false});
 
   @override
-  State<SandboxRecipesScreen> createState() => _SandboxRecipesScreenState();
+  State<RecipesScreen> createState() => _RecipesScreenState();
 }
 
-class _SandboxRecipesScreenState extends State<SandboxRecipesScreen> {
+class _RecipesScreenState extends State<RecipesScreen> {
   String selectedSeason = 'Tous';
   String selectedTime = 'Tous';
   String selectedType = 'Tous';
@@ -182,16 +182,6 @@ class _SandboxRecipesScreenState extends State<SandboxRecipesScreen> {
         scrolledUnderElevation: 0,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: Text('Mes Recettes', style: AppTheme.titleMedium),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: TextButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.compare_arrows, color: AppColors.primaryOrange, size: 20),
-              label: const Text('Ancien design', style: TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.bold, fontSize: 13)),
-            ),
-          ),
-        ],
       ),
       body: content,
     );

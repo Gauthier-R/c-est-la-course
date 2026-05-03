@@ -8,7 +8,7 @@ import 'providers/recipe_provider.dart'; // 📖 Logique métier liée aux recet
 import 'package:intl/date_symbol_data_local.dart'; // 📅 Données locales pour le formatage de dates
 import 'screens/weekly_list_screen.dart'; // 📋 Écran de la liste hebdo
 import 'screens/history_overview_screen.dart'; // 📚 Historique des repas
-import 'screens/sandbox_main_screen.dart'; // 🏠 Nouvel écran principal (design premium)
+import 'screens/main_screen.dart'; // 🏠 Nouvel écran principal (design premium)
 import 'screens/current_week_list_screen.dart'; // 📅 Liste des repas de la semaine actuelle
 import 'screens/next_week_list_screen.dart'; // 🔮 Liste des repas de la semaine suivante
 import 'package:firebase_core/firebase_core.dart'; // 🔥 Nécessaire pour utiliser Firebase
@@ -164,7 +164,7 @@ class AuthWrapper extends StatelessWidget {
         if (!auth.authUser!.emailVerified && !isGoogleUser) {
           return const EmailVerificationScreen();
         }
-        return const SandboxMainScreen();
+        return const MainScreen();
       },
     );
   }

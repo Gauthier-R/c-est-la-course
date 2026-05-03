@@ -4,8 +4,8 @@ import '../utils/app_colors.dart';
 import '../utils/app_theme.dart';
 import '../widgets/lists/meal_suggestions_card.dart';
 
-class SandboxShoppingScreen extends StatelessWidget {
-  const SandboxShoppingScreen({super.key});
+class ShoppingListScreen extends StatelessWidget {
+  const ShoppingListScreen({super.key});
 
   String _formatWeekRange(DateTime start) {
     final fmt = DateFormat('d MMMM', 'fr_FR');

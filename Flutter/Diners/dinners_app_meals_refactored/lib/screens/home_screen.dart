@@ -412,8 +412,8 @@ extension on Widget {
 }
 
 // ─── ÉCRAN PRINCIPAL ACCUEIL SANDBOX ───────────────────────────────────────
-class SandboxHomeScreen extends StatelessWidget {
-  const SandboxHomeScreen({super.key});
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

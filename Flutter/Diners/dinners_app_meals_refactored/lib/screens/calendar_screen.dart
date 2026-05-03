@@ -8,14 +8,14 @@ import '../utils/app_theme.dart';
 import '../providers/meal_provider.dart';
 import '../widgets/calendar/edit_meal_dialog.dart';
 
-class SandboxCalendarScreen extends StatefulWidget {
-  const SandboxCalendarScreen({super.key});
+class CalendarScreen extends StatefulWidget {
+  const CalendarScreen({super.key});
 
   @override
-  State<SandboxCalendarScreen> createState() => _SandboxCalendarScreenState();
+  State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _SandboxCalendarScreenState extends State<SandboxCalendarScreen> {
+class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
 
   @override
