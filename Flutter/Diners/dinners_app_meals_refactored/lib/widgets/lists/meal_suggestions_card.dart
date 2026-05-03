@@ -10,9 +10,11 @@ import '../../models/recipe.dart';
 import '../../providers/meal_provider.dart';
 import '../../providers/recipe_provider.dart';
 import '../../screens/recipe_detail_screen.dart';
+import 'package:intl/intl.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/app_theme.dart';
 import '../../utils/recommendation_engine.dart';
+import '../../utils/date_format.dart';
 
 // ─── Constantes ────────────────────────────────────────────────────────────
 const int _kPageSize   = 5;
@@ -492,10 +494,10 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
   String _moment = 'midi';
   bool _saving = false;
 
-  List<DateTime> _buildDays() {
+  List<DateTime> _buildDays(int weekStartDay) {
     final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    return List.generate(14, (i) => monday.add(Duration(days: i)));
+    final startOfThisWeek = getWeekStart(now, weekStartDay);
+    return List.generate(14, (i) => startOfThisWeek.add(Duration(days: i)));
   }
 
   static const _wd = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -504,7 +506,8 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final days  = _buildDays();
+    final mp = Provider.of<MealProvider>(context, listen: false);
+    final days = _buildDays(mp.weekStartDay);
     final today = DateTime.now();
 
     return Dialog(
@@ -651,7 +654,7 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
             const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
             const SizedBox(width: 8),
             Expanded(child: Text(
-              '"${widget.recipe.name}" planifié le ${_wd[_selectedDate!.weekday - 1]} ${_selectedDate!.day} ${_mo[_selectedDate!.month - 1]}',
+              '"${widget.recipe.name}" planifié le ${DateFormat('EEEE d MMMM', 'fr_FR').format(_selectedDate!)}',
               style: const TextStyle(color: Colors.white),
             )),
           ]),

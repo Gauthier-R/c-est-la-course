@@ -274,8 +274,8 @@ class _PremiumShoppingCard extends StatelessWidget {
     return merged.values.toList();
   }
 
-  void _showAddDialog(BuildContext context) {
-    showAddIngredientDialog(context, weekKey: getWeekKey(DateTime.now()));
+  void _showAddDialog(BuildContext context, int weekStartDay) {
+    showAddIngredientDialog(context, weekKey: getWeekKey(DateTime.now(), weekStartDay));
   }
 
   @override
@@ -307,7 +307,7 @@ class _PremiumShoppingCard extends StatelessWidget {
                     Expanded(child: Text('Ma liste de la semaine', style: AppTheme.titleMedium.copyWith(fontSize: 16))),
                     IconButton(
                       icon: const Icon(Icons.add_circle, color: AppColors.primaryOrange, size: 28),
-                      onPressed: () => _showAddDialog(context),
+                      onPressed: () => _showAddDialog(context, mealProvider.weekStartDay),
                       tooltip: 'Ajouter un ingrédient',
                     ),
                     IconButton(

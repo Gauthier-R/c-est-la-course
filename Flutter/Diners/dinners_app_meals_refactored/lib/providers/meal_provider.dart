@@ -4,18 +4,46 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:dinners_app/utils/date_format.dart';
+import 'auth_provider.dart';
 import 'dart:async';
 
 class MealProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   String? _groupId;
+  int _weekStartDay = 1;
+  
+  int get weekStartDay => _weekStartDay;
   
   CollectionReference<Map<String, dynamic>> _getMealsCollection() {
     if (_groupId == null || _groupId!.isEmpty) {
       throw Exception("MealProvider requires a valid groupId");
     }
     return _firestore.collection('groups').doc(_groupId).collection('meals');
+  }
+
+  void updateFromAuth(AuthProvider auth) {
+    bool changed = false;
+    final newGroupId = auth.currentGroupId;
+    final newStartDay = auth.currentGroup?.weekStartDay ?? 1;
+
+    if (_groupId != newGroupId) {
+      _groupId = newGroupId;
+      _cachedMeals.clear();
+      _syncSubscription?.cancel();
+      if (_groupId != null && _groupId!.isNotEmpty) {
+        startLiveSync();
+        preloadAllMeals().catchError((e) => debugPrint("Preload error: $e"));
+      }
+      changed = true;
+    }
+
+    if (_weekStartDay != newStartDay) {
+      _weekStartDay = newStartDay;
+      changed = true;
+    }
+
+    if (changed) notifyListeners();
   }
 
   void updateGroupId(String? newGroupId) {
@@ -43,7 +71,7 @@ class MealProvider extends ChangeNotifier {
   }
 
   String _getDateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
-  String _getWeekKey(DateTime date) => getWeekKey(date);
+  String _getWeekKey(DateTime date) => getWeekKey(date, _weekStartDay);
 
   final Map<String, Map<String, dynamic>> _cachedMeals = {};
 
@@ -140,7 +168,7 @@ class MealProvider extends ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> getWeeklyIngredients(DateTime referenceDay) async {
-    final start = referenceDay.subtract(Duration(days: referenceDay.weekday - 1));
+    final start = getWeekStart(referenceDay, _weekStartDay);
     final weekDates = List.generate(7, (i) => _getDateKey(start.add(Duration(days: i))));
 
     final List<Map<String, dynamic>> allIngredients = [];
@@ -179,7 +207,7 @@ class MealProvider extends ChangeNotifier {
     final snapshot = await ref.get();
     final data = snapshot.data() ?? {};
     final List<dynamic> currentExtras = data['extras'] ?? [];
-    final DateTime weekStart = _getStartOfWeekFromWeekKey(weekKey);
+    final DateTime weekStart = getStartOfWeekFromKey(weekKey, _weekStartDay);
 
     // Cherche si un ingrédient EXTRA du même nom existe déjà
     final normalizedName = name.trim().toLowerCase();
@@ -326,18 +354,6 @@ class MealProvider extends ChangeNotifier {
     }
 
     notifyListeners();
-  }
-
-  DateTime _getStartOfWeekFromWeekKey(String weekKey) {
-    final match = RegExp(r'^(\d{4})-W(\d{2})\$').firstMatch(weekKey);
-    if (match != null) {
-      final year = int.parse(match.group(1)!);
-      final week = int.parse(match.group(2)!);
-      final firstThursday = DateTime(year, 1, 4);
-      final startOfWeek = firstThursday.subtract(Duration(days: firstThursday.weekday - 1));
-      return startOfWeek.add(Duration(days: (week - 1) * 7));
-    }
-    return DateTime.now();
   }
 
   DateTime getStartOfIsoWeek(int year, int weekNumber) {

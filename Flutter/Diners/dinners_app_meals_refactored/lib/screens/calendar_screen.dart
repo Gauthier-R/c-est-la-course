@@ -84,7 +84,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       lastDay: DateTime.utc(2030, 12, 31),
                       focusedDay: _focusedDay,
                       selectedDayPredicate: (day) => isSameDay(mealProvider.selectedDay, day),
-                      startingDayOfWeek: StartingDayOfWeek.monday,
+                      startingDayOfWeek: StartingDayOfWeek.values[(mealProvider.weekStartDay - 1).clamp(0, 6)],
                       onDaySelected: (selected, focused) {
                         mealProvider.selectDay(selected);
                         setState(() => _focusedDay = focused);

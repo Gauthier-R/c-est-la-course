@@ -101,7 +101,7 @@ class AuthProvider extends ChangeNotifier {
       final doc = await _firestore.collection('groups').doc(groupId).get();
 
       if (doc.exists) {
-        _currentGroup = GroupModel.fromMap(doc.data()!, doc.id);
+        _currentGroup = GroupModel.fromMap(doc.data() ?? {}, doc.id);
         // Abonnement temps réel au groupe
         _startGroupStream(groupId);
       } else {
@@ -121,7 +121,7 @@ class AuthProvider extends ChangeNotifier {
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
-        _currentGroup = GroupModel.fromMap(snapshot.data()!, snapshot.id);
+        _currentGroup = GroupModel.fromMap(snapshot.data() ?? {}, snapshot.id);
         notifyListeners();
       }
     });
@@ -422,6 +422,14 @@ class AuthProvider extends ChangeNotifier {
     // Le stream mettra à jour automatiquement
   }
 
+  Future<void> updateWeekStartDay(int day) async {
+    if (_currentGroup == null) return;
+    await _firestore
+        .collection('groups')
+        .doc(_currentGroup!.id)
+        .update({'weekStartDay': day});
+  }
+
   Future<void> removeGroup(String groupId) async {
     if (_userProfile == null) return;
 
@@ -482,7 +490,7 @@ class AuthProvider extends ChangeNotifier {
         .where(FieldPath.documentId, whereIn: groupIds)
         .get();
     return qs.docs
-        .map((doc) => GroupModel.fromMap(doc.data(), doc.id))
+        .map((doc) => GroupModel.fromMap(doc.data() ?? {}, doc.id))
         .toList();
   }
 

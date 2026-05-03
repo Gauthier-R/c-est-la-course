@@ -7,6 +7,9 @@ import 'package:dinners_app/utils/date_format.dart';
 import 'package:dinners_app/widgets/lists/edit_weekly_list_dialog.dart';
 import 'package:dinners_app/widgets/lists/add_ingredient_dialog.dart';
 
+import 'package:provider/provider.dart';
+import 'package:dinners_app/providers/meal_provider.dart';
+
 class CurrentWeekListScreen extends StatelessWidget {
   const CurrentWeekListScreen({super.key});
 
@@ -15,14 +18,15 @@ class CurrentWeekListScreen extends StatelessWidget {
     return 'Du ${fmt.format(start)} au ${fmt.format(start.add(const Duration(days: 6)))}';
   }
 
-  void _showAddDialog(BuildContext context, DateTime weekStart) {
-    showAddIngredientDialog(context, weekKey: getWeekKey(weekStart));
+  void _showAddDialog(BuildContext context, DateTime weekStart, int weekStartDay) {
+    showAddIngredientDialog(context, weekKey: getWeekKey(weekStart, weekStartDay));
   }
 
   @override
   Widget build(BuildContext context) {
+    final mealProvider = Provider.of<MealProvider>(context);
     final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    final weekStart = getWeekStart(now, mealProvider.weekStartDay);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -50,7 +54,7 @@ class CurrentWeekListScreen extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.add_circle, color: AppColors.primaryOrange, size: 28),
-                    onPressed: () => _showAddDialog(context, weekStart),
+                    onPressed: () => _showAddDialog(context, weekStart, mealProvider.weekStartDay),
                     tooltip: 'Ajouter',
                   ),
                   IconButton(

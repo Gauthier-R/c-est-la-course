@@ -50,7 +50,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProxyProvider<AuthProvider, MealProvider>(
           create: (_) => MealProvider(),
-          update: (_, auth, meal) => meal!..updateGroupId(auth.currentGroupId),
+          update: (_, auth, meal) => meal!..updateFromAuth(auth),
         ),
         ChangeNotifierProxyProvider<AuthProvider, RecipeProvider>(
           create: (_) => RecipeProvider(),

@@ -7,6 +7,7 @@ class GroupModel {
   final String inviteCode;
   final List<String> members;
   final List<String> pendingRequests;
+  final int weekStartDay; // 1 = Lundi, ..., 7 = Dimanche
 
   GroupModel({
     required this.id,
@@ -15,6 +16,7 @@ class GroupModel {
     required this.inviteCode,
     required this.members,
     required this.pendingRequests,
+    this.weekStartDay = 1,
   });
 
   factory GroupModel.fromMap(Map<String, dynamic> data, String documentId) {
@@ -25,6 +27,7 @@ class GroupModel {
       inviteCode: data['inviteCode'] ?? '',
       members: List<String>.from(data['members'] ?? []),
       pendingRequests: List<String>.from(data['pendingRequests'] ?? []),
+      weekStartDay: (data['weekStartDay'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -35,6 +38,7 @@ class GroupModel {
       'inviteCode': inviteCode,
       'members': members,
       'pendingRequests': pendingRequests,
+      'weekStartDay': weekStartDay,
     };
   }
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/meal_provider.dart';
 import '../utils/app_colors.dart';
 import '../utils/responsive_helper.dart';
+import '../utils/date_format.dart';
 import 'history_list_screen.dart';
 
 class HistoryOverviewScreen extends StatelessWidget {
@@ -15,13 +16,13 @@ class HistoryOverviewScreen extends StatelessWidget {
     return 'Du ${formatter.format(startOfWeek)} au ${formatter.format(endOfWeek)}';
   }
 
-  DateTime getStartOfWeek(DateTime date) => date.subtract(Duration(days: date.weekday - 1));
+  DateTime getStartOfWeek(DateTime date, int weekStartDay) => getWeekStart(date, weekStartDay);
 
   @override
   Widget build(BuildContext context) {
     final mealProvider = Provider.of<MealProvider>(context);
     final now = DateTime.now();
-    final currentWeekKey = DateFormat('yyyy-MM-dd').format(getStartOfWeek(now));
+    final currentWeekKey = DateFormat('yyyy-MM-dd').format(getStartOfWeek(now, mealProvider.weekStartDay));
 
     final uniqueWeeks = mealProvider
         .getAllUsedWeekStarts()

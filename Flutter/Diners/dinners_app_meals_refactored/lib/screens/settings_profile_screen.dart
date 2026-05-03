@@ -816,8 +816,6 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
           // Code d'invitation avec copie
           InkWell(
             onTap: () => _copyInviteCode(group.inviteCode),
-            borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(16)),
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -846,6 +844,118 @@ class _SettingsProfileScreenState extends State<SettingsProfileScreen> {
                 ],
               ),
             ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade100),
+          _buildWeekStartSelector(context, group, isOwner),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekStartSelector(BuildContext context, GroupModel group, bool isOwner) {
+    final days = [
+      {'val': 1, 'name': 'Lun'},
+      {'val': 2, 'name': 'Mar'},
+      {'val': 3, 'name': 'Mer'},
+      {'val': 4, 'name': 'Jeu'},
+      {'val': 5, 'name': 'Ven'},
+      {'val': 6, 'name': 'Sam'},
+      {'val': 7, 'name': 'Dim'},
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Début de la semaine',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!isOwner)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('Lecture seule', style: GoogleFonts.poppins(fontSize: 9, color: Colors.grey)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Définit le premier jour de vos listes de courses et du calendrier.',
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: days.map((day) {
+              final currentStart = (group as dynamic).weekStartDay ?? 1;
+              final isSelected = currentStart == day['val'];
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: GestureDetector(
+                    onTap: isOwner ? () async {
+                      try {
+                        await Provider.of<AuthProvider>(context, listen: false)
+                            .updateWeekStartDay(day['val'] as int);
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          _buildSnackBar('Erreur : $e', success: false),
+                        );
+                      }
+                    } : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primaryGreen.withValues(alpha: 0.08) : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primaryGreen : Colors.grey.shade200,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            day['name'] as String,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              color: isSelected ? AppColors.primaryGreen : AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 6, height: 6,
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primaryGreen : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -889,7 +999,7 @@ class _MembersStreamSection extends StatelessWidget {
         }
 
         final group = GroupModel.fromMap(
-            snapshot.data!.data() as Map<String, dynamic>, groupId);
+            snapshot.data!.data() as Map<String, dynamic>? ?? {}, groupId);
         final memberIds = group.members;
 
         if (memberIds.isEmpty) {
@@ -992,7 +1102,7 @@ class _PendingRequestsSection extends StatelessWidget {
         }
 
         final group = GroupModel.fromMap(
-            snapshot.data!.data() as Map<String, dynamic>, groupId);
+            snapshot.data!.data() as Map<String, dynamic>? ?? {}, groupId);
         final pendingIds = group.pendingRequests;
 
         if (pendingIds.isEmpty) return const SizedBox.shrink();
