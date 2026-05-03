@@ -19,8 +19,13 @@ class WeeklyIngredientList extends StatelessWidget {
   String _formatQuantity(Map<String, dynamic> item) {
     final quantity = item['quantity'] ?? 0;
     final unit = item['unit'] ?? 'QT';
-    if (unit == 'QT') return 'x $quantity';
-    return '$quantity $unit';
+    // Formatage pour enlever le .0 si c'est un entier
+    final formattedQty = quantity is double && quantity == quantity.roundToDouble() 
+        ? quantity.toInt().toString() 
+        : quantity.toString();
+        
+    if (unit == 'QT') return 'x $formattedQty';
+    return '$formattedQty $unit';
   }
 
   /// Fusionne les ingrédients de même nom en cumulant les quantités
@@ -33,8 +38,8 @@ class WeeklyIngredientList extends StatelessWidget {
       final key = name.toLowerCase();
       if (merged.containsKey(key)) {
         final existing = merged[key]!;
-        final existingQty = ((existing['quantity'] as num?) ?? 0).toInt();
-        final newQty = ((item['quantity'] as num?) ?? 0).toInt();
+        final num existingQty = (existing['quantity'] as num?) ?? 0;
+        final num newQty = (item['quantity'] as num?) ?? 0;
         existing['quantity'] = existingQty + newQty;
       } else {
         merged[key] = Map<String, dynamic>.from(item);

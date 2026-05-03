@@ -246,9 +246,14 @@ class _PremiumShoppingCard extends StatelessWidget {
   String _formatQty(Map<String, dynamic> item) {
     var qty = item['quantity'] ?? 0;
     var unit = item['unit'] ?? 'QT';
-    if (qty is num && qty == qty.toInt()) qty = qty.toInt();
-    if (unit == 'QT') return 'x $qty';
-    return '$qty $unit';
+    
+    // Formatage pour enlever le .0 si c'est un entier
+    final formattedQty = qty is num && qty == qty.roundToDouble() 
+        ? qty.toInt().toString() 
+        : qty.toString();
+
+    if (unit == 'QT') return 'x $formattedQty';
+    return '$formattedQty $unit';
   }
 
   /// Fusionne les ingrédients de même nom en cumulant les quantités
@@ -259,8 +264,8 @@ class _PremiumShoppingCard extends StatelessWidget {
       if (name.isEmpty) continue;
       final key = name.toLowerCase();
       if (merged.containsKey(key)) {
-        final existingQty = ((merged[key]!['quantity'] as num?) ?? 0).toInt();
-        final newQty = ((item['quantity'] as num?) ?? 0).toInt();
+        final num existingQty = (merged[key]!['quantity'] as num?) ?? 0;
+        final num newQty = (item['quantity'] as num?) ?? 0;
         merged[key]!['quantity'] = existingQty + newQty;
       } else {
         merged[key] = Map<String, dynamic>.from(item);

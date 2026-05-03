@@ -183,7 +183,7 @@ class RecipeDetailScreen extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(child: Text(ing['name'] ?? '', style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600))),
               Text(
-                '${ing["quantity"]} ${ing["unit"]}',
+                '${(ing["quantity"] is num && ing["quantity"] == ing["quantity"].roundToDouble()) ? ing["quantity"].toInt() : ing["quantity"]} ${ing["unit"]}',
                 style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w700),
               ),
             ],

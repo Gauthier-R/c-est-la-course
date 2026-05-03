@@ -19,8 +19,14 @@ class ShoppingListCard extends StatelessWidget {
   String formatQuantity(Map<String, dynamic> item) {
     final quantity = item['quantity'] ?? 0;
     final unit = item['unit'] ?? 'QT';
-    if (unit == 'QT') return 'x $quantity';
-    return '$quantity $unit';
+    
+    // Formatage pour enlever le .0 si c'est un entier
+    final formattedQty = quantity is double && quantity == quantity.roundToDouble() 
+        ? quantity.toInt().toString() 
+        : quantity.toString();
+
+    if (unit == 'QT') return 'x $formattedQty';
+    return '$formattedQty $unit';
   }
 
   void _showAddIngredientDialog(BuildContext context) {
@@ -67,7 +73,8 @@ class ShoppingListCard extends StatelessWidget {
                       flex: 2,
                       child: TextField(
                         controller: qtyController,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*'))],
                         onTap: () => qtyController.selection = TextSelection(baseOffset: 0, extentOffset: qtyController.text.length),
                         decoration: const InputDecoration(
                           prefixText: 'x',
@@ -115,7 +122,7 @@ class ShoppingListCard extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               final name = nameController.text.trim();
-              final qty = int.tryParse(qtyController.text.trim()) ?? 1;
+              final qty = double.tryParse(qtyController.text.trim().replaceAll(',', '.')) ?? 1.0;
               if (name.isNotEmpty) {
                 await mealProvider.addWeeklyExtra(weekKey, name, qty, selectedUnit);
                 Navigator.pop(context);

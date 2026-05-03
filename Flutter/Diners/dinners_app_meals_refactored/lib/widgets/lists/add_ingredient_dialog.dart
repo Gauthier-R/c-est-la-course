@@ -126,8 +126,8 @@ Future<void> showAddIngredientDialog(
                               ),
                               child: TextField(
                                 controller: qtyCtrl,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*'))],
                                 textAlign: TextAlign.center,
                                 style: AppTheme.titleMedium.copyWith(fontSize: 18),
                                 onTap: () => qtyCtrl.selection = TextSelection(baseOffset: 0, extentOffset: qtyCtrl.text.length),
@@ -186,7 +186,7 @@ Future<void> showAddIngredientDialog(
                             setS(() => nameError = true);
                             return;
                           }
-                          final qty = int.tryParse(qtyCtrl.text.trim()) ?? 1;
+                          final qty = double.tryParse(qtyCtrl.text.trim().replaceAll(',', '.')) ?? 1.0;
 
                           setS(() => isLoading = true);
 
@@ -247,7 +247,7 @@ Future<void> showAddIngredientDialog(
 }
 
 // ── Popup de confirmation doublon ──────────────────────────────────────────
-Future<bool> _showDuplicateConfirmDialog(BuildContext context, String name, int qty) async {
+Future<bool> _showDuplicateConfirmDialog(BuildContext context, String name, num qty) async {
   return await showDialog<bool>(
     context: context,
     builder: (ctx) => Dialog(

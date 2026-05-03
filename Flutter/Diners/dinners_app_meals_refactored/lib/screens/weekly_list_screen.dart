@@ -66,7 +66,7 @@ class WeeklyListScreen extends StatelessWidget {
                                   },
                                 ),
                                 title: Text('${item['name']}'),
-                                trailing: Text('x${item['quantity']}'),
+                                trailing: Text('x${(item['quantity'] is num && item['quantity'] == item['quantity'].roundToDouble()) ? item['quantity'].toInt() : item['quantity']}'),
                               );
                             },
                           ),

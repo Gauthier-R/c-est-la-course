@@ -23,13 +23,18 @@ samples, guidance on mobile development, and a full API reference.
 - Afficher les appareils : `flutter devices`
 - Lancement sur un appareil : `flutter run -d <deviceID>`
 
-2. Pour mettre à jour la version Web (En ligne) :
+2. Pour lancer sur un émulateur Android :
+
+- Afficher les émulateurs : `flutter emulators --launch Medium_Phone_API_35`
+- Lancement sur un émulateur : `flutter run -d emulator-5554`
+
+3. Pour mettre à jour la version Web (En ligne) :
 
 - Compiler pour le Web : `flutter build web --release`
 - Envoyer sur Firebase : `firebase deploy --only hosting`
 Une fois cette commande terminée, votre site est à jour pour tout le monde !
 
-3. Pour mettre à jour l'APK (Android) :
+4. Pour mettre à jour l'APK (Android) :
 
 - Générer le fichier : `flutter build apk --release`
 - Publier sur GitHub : `gh release create v1.x.x build\app\outputs\flutter-apk\app-release.apk --repo Gauthier-R/DinnersApp-Releases --title "v1.x.x"`

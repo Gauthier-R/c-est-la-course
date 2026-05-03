@@ -153,7 +153,7 @@ Tu dois retourner un objet JSON avec la structure exacte suivante. Remplis TOUS 
 }
 
 RÈGLES POUR LES INGRÉDIENTS :
-- "quantity" doit être un nombre entier (arrondir si nécessaire : 0.5 → 1, 1.5 → 2, 200g → 200)
+- "quantity" doit être un nombre (ex: 1, 0.5, 1.5, 200). Ne pas arrondir à l'entier si une décimale est présente.
 - "unit" doit être l'une de ces valeurs exactes : "g", "kg", "ml", "cl", "L", "c.à.s", "c.à.c", "pincée", "QT"
 - Si l'ingrédient a un nombre d'unités (ex: "4 tomates", "2 oeufs"), utilise la quantité comme nombre et "QT" comme unité
 - Si aucune quantité n'est indiquée, mets quantity=1 et unit="QT"
@@ -227,15 +227,13 @@ IMPORTANT : Ne retourne QUE le JSON, sans texte avant ou après. Pas de commenta
             if (ingName.isEmpty || ingName == 'Inconnu') continue;
 
             final qtyRaw = rawIng['quantity'];
-            int qty;
-            if (qtyRaw is int) {
-              qty = qtyRaw;
-            } else if (qtyRaw is double) {
-              qty = qtyRaw.round();
+            double qty;
+            if (qtyRaw is num) {
+              qty = qtyRaw.toDouble();
             } else if (qtyRaw is String) {
-              qty = int.tryParse(qtyRaw) ?? double.tryParse(qtyRaw)?.round() ?? 1;
+              qty = double.tryParse(qtyRaw.replaceAll(',', '.')) ?? 1.0;
             } else {
-              qty = 1;
+              qty = 1.0;
             }
 
             final String unit = _normalizeUnit(rawIng['unit']?.toString() ?? 'QT');

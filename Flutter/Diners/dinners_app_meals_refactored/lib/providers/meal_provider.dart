@@ -174,7 +174,7 @@ class MealProvider extends ChangeNotifier {
     return allIngredients;
   }
 
-  Future<void> addWeeklyExtra(String weekKey, String name, int quantity, [String unit = 'QT']) async {
+  Future<void> addWeeklyExtra(String weekKey, String name, num quantity, [String unit = 'QT']) async {
     final ref = _getMealsCollection().doc(weekKey);
     final snapshot = await ref.get();
     final data = snapshot.data() ?? {};
@@ -190,7 +190,7 @@ class MealProvider extends ChangeNotifier {
     if (existingIndex != -1) {
       // Fusionne les quantités
       final existing = Map<String, dynamic>.from(currentExtras[existingIndex]);
-      existing['quantity'] = ((existing['quantity'] as num?) ?? 0).toInt() + quantity;
+      existing['quantity'] = ((existing['quantity'] as num?) ?? 0) + quantity;
       currentExtras[existingIndex] = existing;
     } else {
       currentExtras.add({
@@ -252,7 +252,7 @@ class MealProvider extends ChangeNotifier {
       final DateTime date = rawDate is Timestamp ? rawDate.toDate() : rawDate as DateTime;
       final String moment = ingredient['moment'];
       final String name = ingredient['name'];
-      final int quantity = ingredient['quantity'];
+      final num quantity = ingredient['quantity'];
 
       final key = _getDateKey(date);
       final ref = _getMealsCollection().doc(key);
@@ -288,7 +288,7 @@ class MealProvider extends ChangeNotifier {
       };
     } else {
       final String name = ingredient['name'];
-      final int quantity = ingredient['quantity'];
+      final num quantity = ingredient['quantity'];
 
       final dynamic rawDate = ingredient['date'];
       DateTime date;

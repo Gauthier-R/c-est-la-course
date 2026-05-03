@@ -106,8 +106,8 @@ class _EditMealDialogState extends State<EditMealDialog> {
   void _updateIngredientName(int index, String name) => _ingredients[index]['name'] = name;
 
   void _updateQuantity(int index, String value) {
-    final qty = int.tryParse(value);
-    _ingredients[index]['quantity'] = (qty != null && qty > 0) ? qty : 1;
+    final qty = double.tryParse(value.replaceAll(',', '.'));
+    _ingredients[index]['quantity'] = (qty != null && qty > 0) ? qty : 1.0;
     _qtyControllers[index].text = _ingredients[index]['quantity'].toString();
   }
 
@@ -389,8 +389,8 @@ class _EditMealDialogState extends State<EditMealDialog> {
                                         flex: 2,
                                         child: TextField(
                                           controller: _qtyControllers[index],
-                                          keyboardType: TextInputType.number,
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*'))],
                                           textAlign: TextAlign.center,
                                           decoration: InputDecoration(
                                             border: InputBorder.none, isDense: true,

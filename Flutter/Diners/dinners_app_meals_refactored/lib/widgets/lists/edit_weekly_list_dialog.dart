@@ -199,8 +199,8 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
                                               flex: 2,
                                               child: TextField(
                                                 controller: qtyCtrl,
-                                                keyboardType: TextInputType.number,
-                                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*'))],
                                                 textAlign: TextAlign.center,
                                                 style: AppTheme.labelSmall.copyWith(fontWeight: FontWeight.w700),
                                                 decoration: InputDecoration(
@@ -209,7 +209,7 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
                                                 ),
                                                 onTap: () => qtyCtrl.selection = TextSelection(baseOffset: 0, extentOffset: qtyCtrl.text.length),
                                                 onTapOutside: (_) { if (qtyCtrl.text.isEmpty) qtyCtrl.text = '1'; },
-                                                onChanged: (v) => ingredients[index]['quantity'] = int.tryParse(v) ?? 1,
+                                                onChanged: (v) => ingredients[index]['quantity'] = double.tryParse(v.replaceAll(',', '.')) ?? 1.0,
                                               ),
                                             ),
                                             const SizedBox(width: 4),

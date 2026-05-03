@@ -28,6 +28,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   String? _imageBase64;
   final List<Map<String, dynamic>> _ingredients = [];
   bool _isScanning = false;
+  int? _editingIndex;
 
   final List<String> _types = ['Entrée', 'Plat', 'Dessert'];
   final List<String> _seasons = ['Été', 'Hiver', 'Les deux'];
@@ -77,13 +78,40 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
   void _addIngredient() {
     if (_ingredientNameCtrl.text.trim().isEmpty) return;
-    final qty = int.tryParse(_ingredientQtyCtrl.text.trim()) ?? 1;
+    final qty = double.tryParse(_ingredientQtyCtrl.text.trim().replaceAll(',', '.')) ?? 1.0;
     setState(() {
-      _ingredients.add({'name': _ingredientNameCtrl.text.trim(), 'quantity': qty, 'unit': _selectedUnit});
+      if (_editingIndex != null) {
+        _ingredients[_editingIndex!] = {
+          'name': _ingredientNameCtrl.text.trim(),
+          'quantity': qty,
+          'unit': _selectedUnit
+        };
+        _editingIndex = null;
+      } else {
+        _ingredients.add({
+          'name': _ingredientNameCtrl.text.trim(),
+          'quantity': qty,
+          'unit': _selectedUnit
+        });
+      }
     });
     _ingredientNameCtrl.clear();
     _ingredientQtyCtrl.clear();
     FocusScope.of(context).unfocus();
+  }
+
+  void _editIngredient(int index) {
+    final ing = _ingredients[index];
+    setState(() {
+      _editingIndex = index;
+      _ingredientNameCtrl.text = ing['name'];
+      final qty = ing['quantity'];
+      _ingredientQtyCtrl.text = (qty is num && qty == qty.roundToDouble()) 
+          ? qty.toInt().toString() 
+          : qty.toString();
+      _selectedUnit = ing['unit'];
+    });
+    // Optionnel: scroller vers le haut ou mettre le focus
   }
 
   void _saveRecipe() {
@@ -394,7 +422,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
         child: Form(
           key: _formKey,
           child: Column(
@@ -529,7 +557,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                       flex: 1,
                       child: TextField(
                         controller: _ingredientQtyCtrl,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         style: AppTheme.bodyText,
                         textAlign: TextAlign.center,
                         decoration: const InputDecoration(hintText: '0', border: InputBorder.none, isDense: true),
@@ -546,12 +574,31 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
+                    if (_editingIndex != null)
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _editingIndex = null;
+                            _ingredientNameCtrl.clear();
+                            _ingredientQtyCtrl.clear();
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+                          child: Icon(Icons.close, color: Colors.grey.shade600, size: 18),
+                        ),
+                      ),
+                    const SizedBox(width: 4),
                     GestureDetector(
                       onTap: _addIngredient,
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(color: AppColors.primaryOrange, shape: BoxShape.circle),
-                        child: const Icon(Icons.add, color: Colors.white, size: 18),
+                        decoration: BoxDecoration(
+                          color: _editingIndex != null ? AppColors.primaryGreen : AppColors.primaryOrange, 
+                          shape: BoxShape.circle
+                        ),
+                        child: Icon(_editingIndex != null ? Icons.check : Icons.add, color: Colors.white, size: 18),
                       ),
                     ),
                   ],
@@ -574,16 +621,37 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100, indent: 20),
                     itemBuilder: (context, index) {
                       final ing = _ingredients[index];
+                      final isEditingThis = _editingIndex == index;
                       return ListTile(
+                        onTap: () => _editIngredient(index),
+                        selected: isEditingThis,
+                        selectedTileColor: AppColors.primaryOrange.withValues(alpha: 0.05),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                         leading: Container(
                           width: 8, height: 8,
-                          decoration: const BoxDecoration(color: AppColors.primaryGreen, shape: BoxShape.circle),
+                          decoration: BoxDecoration(
+                            color: isEditingThis ? AppColors.primaryOrange : AppColors.primaryGreen, 
+                            shape: BoxShape.circle
+                          ),
                         ),
-                        title: Text(ing['name'], style: AppTheme.bodyText.copyWith(fontWeight: FontWeight.w600)),
-                        subtitle: Text('${ing["quantity"]} ${ing["unit"]}', style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary)),
+                        title: Text(ing['name'], style: AppTheme.bodyText.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: isEditingThis ? AppColors.primaryOrange : AppColors.textPrimary,
+                        )),
+                        subtitle: Text('${(ing["quantity"] is num && ing["quantity"] == ing["quantity"].roundToDouble()) ? ing["quantity"].toInt() : ing["quantity"]} ${ing["unit"]}', style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary)),
                         trailing: GestureDetector(
-                          onTap: () => setState(() => _ingredients.removeAt(index)),
+                          onTap: () {
+                            setState(() {
+                              _ingredients.removeAt(index);
+                              if (_editingIndex == index) {
+                                _editingIndex = null;
+                                _ingredientNameCtrl.clear();
+                                _ingredientQtyCtrl.clear();
+                              } else if (_editingIndex != null && _editingIndex! > index) {
+                                _editingIndex = _editingIndex! - 1;
+                              }
+                            });
+                          },
                           child: Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle),
@@ -595,25 +663,39 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   ),
                 ),
 
-              const SizedBox(height: 32),
-
-              // ── BOUTON ENREGISTRER ───────────────────────────────
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryOrange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  ),
-                  onPressed: _saveRecipe,
-                  child: Text(isEditing ? 'Enregistrer les modifications' : 'Créer la recette',
-                    style: AppTheme.titleMedium.copyWith(color: Colors.white, fontSize: 16)),
-                ),
-              ),
             ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryOrange,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              onPressed: _saveRecipe,
+              child: Text(
+                isEditing ? 'Enregistrer les modifications' : 'Créer la recette',
+                style: AppTheme.titleMedium.copyWith(color: Colors.white, fontSize: 16),
+              ),
+            ),
           ),
         ),
       ),
