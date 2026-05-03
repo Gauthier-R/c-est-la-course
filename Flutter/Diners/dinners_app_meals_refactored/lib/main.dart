@@ -27,20 +27,8 @@ void main() async {
   await initializeDateFormatting('fr_FR', null);
 
   // 🔥 Initialisation de Firebase pour activer tous les services (Firestore, Auth, etc.)
-<<<<<<< Updated upstream
-  await Firebase.initializeApp();
-
-  // 🛡️ Activation de App Check en mode Debug (utile pour éviter les blocages en dev)
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.debug, // ✅ On utilise le fournisseur debug car l'app n'est pas publiée
-<<<<<<< Updated upstream
-=======
-    isTokenAutoRefreshEnabled: true, // 🔄 Firebase régénère automatiquement le jeton toutes les 30 min
-=======
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
->>>>>>> Stashed changes
->>>>>>> Stashed changes
   );
 
   // 🛡️ Activation de App Check en mode Debug (uniquement sur mobile pour l'instant)
@@ -100,12 +88,6 @@ class MyApp extends StatelessWidget {
           Theme.of(context).textTheme,
         ),
       ),
-<<<<<<< Updated upstream
-      home: const AuthWrapper(),
-=======
-<<<<<<< Updated upstream
-      home: const MainScreen(),
-=======
       builder: (context, child) {
         if (kIsWeb) {
           return Container(
@@ -132,8 +114,6 @@ class MyApp extends StatelessWidget {
         return child!;
       },
       home: const AuthWrapper(),
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       onGenerateRoute: (settings) {
         if (settings.name == '/week' && settings.arguments is DateTime) {
           return MaterialPageRoute(

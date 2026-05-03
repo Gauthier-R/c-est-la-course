@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // 🌐 Nécessaire pour kIsWeb
+import '../utils/url_helper/url_helper.dart'; // ⬇️ Pour télécharger l'APK
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -198,6 +200,29 @@ class _AuthScreenState extends State<AuthScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          // ⬇️ Bouton pour télécharger l'app sur Android depuis le Web (Écran de connexion)
+          if (kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.android_rounded, color: AppColors.primaryGreen),
+                tooltip: 'Télécharger l\'application Android',
+                onPressed: () {
+                  // Lien direct de téléchargement GitHub Releases
+                  openExternalUrl('https://github.com/Gauthier-R/DinnersApp-Releases/releases/latest/download/app-release.apk');
+                },
+              ),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
