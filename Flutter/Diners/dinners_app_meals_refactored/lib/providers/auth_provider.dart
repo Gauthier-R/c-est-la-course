@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/group_model.dart';
 
@@ -78,7 +79,7 @@ class AuthProvider extends ChangeNotifier {
       }
 
       if (doc.exists) {
-        _userProfile = UserModel.fromMap(doc.data()!, doc.id);
+        _userProfile = UserModel.fromMap(doc.data() ?? {}, doc.id);
         _startUserStream(uid); // Abonnement temps réel au profil utilisateur
         await _loadCurrentGroup();
       }
@@ -140,7 +141,7 @@ class AuthProvider extends ChangeNotifier {
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
-        final newUserProfile = UserModel.fromMap(snapshot.data()!, snapshot.id);
+        final newUserProfile = UserModel.fromMap(snapshot.data() ?? {}, snapshot.id);
         bool currentGroupChanged = _userProfile?.currentGroupId != newUserProfile.currentGroupId;
         
         _userProfile = newUserProfile;
@@ -232,17 +233,27 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return;
+      UserCredential cred;
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+      if (kIsWeb) {
+        // Sur Web, on utilise signInWithPopup qui est beaucoup plus stable
+        // et ne nécessite pas de configuration complexe de Client ID dans le code.
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        cred = await _auth.signInWithPopup(googleProvider);
+      } else {
+        // Sur Mobile, on garde le flux GoogleSignIn habituel
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) return;
 
-      final cred = await _auth.signInWithCredential(credential);
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        cred = await _auth.signInWithCredential(credential);
+      }
+
       if (cred.user != null) {
         var doc =
             await _firestore.collection('users').doc(cred.user!.uid).get();
