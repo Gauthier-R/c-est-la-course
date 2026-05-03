@@ -1,5 +1,0 @@
-Analyzing dinners_app_meals_refactored...                       
-
-warning - The URI 'package:flutter_lints/flutter.yaml' included in 'C:\Users\gauth\Desktop\ProjetCode\Flutter\Diners\dinners_app_meals_refactored\analysis_options.yaml' can't be found when analyzing 'C:\Users\gauth\Desktop\ProjetCode\Flutter\Diners\dinners_app_meals_refactored' - analysis_options.yaml:10:10 - include_file_not_found
-  error - The named parameter 'isTokenAutoRefreshEnabled' isn't defined - lib\main.dart:28:5 - undefined_named_parameter
-
