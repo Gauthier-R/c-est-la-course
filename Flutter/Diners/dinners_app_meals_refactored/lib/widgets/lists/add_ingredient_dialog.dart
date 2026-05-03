@@ -16,7 +16,7 @@ Future<void> showAddIngredientDialog(
   final mealProvider = Provider.of<MealProvider>(context, listen: false);
   final nameCtrl = TextEditingController();
   final qtyCtrl  = TextEditingController(text: '1');
-  final units = ['QT', 'g', 'kg', 'mL', 'L'];
+  final units = ['QT', 'g', 'kg', 'cl', 'L', 'c.à.s.', 'c.à.c.', 'pincée', 'sachet', 'boîte', 'botte'];
 
   await showDialog(
     context: context,

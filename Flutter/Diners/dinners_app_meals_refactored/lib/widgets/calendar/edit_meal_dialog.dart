@@ -15,7 +15,8 @@ class EditMealDialog extends StatefulWidget {
   final String moment;
   final String initialMeal;
   final List<Map<String, dynamic>> initialIngredients;
-  final Function(String, List<Map<String, dynamic>>) onValidate;
+  final bool initialIsLeftover;
+  final Function(String, List<Map<String, dynamic>>, bool) onValidate;
   final DateTime date;
 
   const EditMealDialog({
@@ -23,6 +24,7 @@ class EditMealDialog extends StatefulWidget {
     required this.moment,
     required this.initialMeal,
     required this.initialIngredients,
+    required this.initialIsLeftover,
     required this.onValidate,
     required this.date,
   });
@@ -32,7 +34,8 @@ class EditMealDialog extends StatefulWidget {
     required String moment,
     required String initialMeal,
     required List<Map<String, dynamic>> initialIngredients,
-    required Function(String, List<Map<String, dynamic>>) onValidate,
+    required bool initialIsLeftover,
+    required Function(String, List<Map<String, dynamic>>, bool) onValidate,
     required DateTime date,
   }) async {
     await showDialog(
@@ -41,6 +44,7 @@ class EditMealDialog extends StatefulWidget {
         moment: moment,
         initialMeal: initialMeal,
         initialIngredients: initialIngredients,
+        initialIsLeftover: initialIsLeftover,
         onValidate: onValidate,
         date: date,
       ),
@@ -55,19 +59,28 @@ class _EditMealDialogState extends State<EditMealDialog> {
   late TextEditingController _mealController;
   late List<Map<String, dynamic>> _ingredients;
   final List<TextEditingController> _qtyControllers = [];
-  final List<String> _units = ['QT', 'g', 'kg', 'mL', 'L'];
+  final List<String> _units = ['QT', 'g', 'kg', 'cl', 'L', 'c.à.s.', 'c.à.c.', 'pincée', 'sachet', 'boîte', 'botte'];
   final List<String> _selectedUnits = [];
 
   // Pour afficher l'aperçu de la recette sélectionnée
   String? _selectedRecipeImage;
+  bool _isLeftover = false;
 
   @override
   void initState() {
     super.initState();
     _mealController = TextEditingController(text: widget.initialMeal);
     _ingredients = List<Map<String, dynamic>>.from(widget.initialIngredients);
+    _isLeftover = widget.initialIsLeftover;
     _qtyControllers.addAll(_ingredients.map((e) => TextEditingController(text: e['quantity'].toString())));
     _selectedUnits.addAll(_ingredients.map((e) => e['unit']?.toString() ?? 'QT'));
+
+    // Sécurité : Ajouter les unités des ingrédients qui ne seraient pas dans la liste par défaut
+    for (var u in _selectedUnits) {
+      if (!_units.contains(u)) {
+        _units.add(u);
+      }
+    }
 
     // Chercher une image pour le repas initial si c'est une recette connue
     WidgetsBinding.instance.addPostFrameCallback((_) => _tryFindRecipeImage());
@@ -132,15 +145,15 @@ class _EditMealDialogState extends State<EditMealDialog> {
         .toList();
 
     if (mealName.isNotEmpty) {
-      widget.onValidate(mealName, cleanIngredients);
+      widget.onValidate(mealName, cleanIngredients, _isLeftover);
       Provider.of<MealProvider>(context, listen: false)
-          .updateMealAndIngredients(widget.date, widget.moment, mealName, cleanIngredients);
+          .updateMealAndIngredients(widget.date, widget.moment, mealName, cleanIngredients, isLeftover: _isLeftover);
       Navigator.pop(context);
     }
   }
 
   void _delete() {
-    widget.onValidate('', []);
+    widget.onValidate('', [], false);
     Provider.of<MealProvider>(context, listen: false).deleteMeal(widget.date, widget.moment);
     Navigator.pop(context);
   }
@@ -164,18 +177,22 @@ class _EditMealDialogState extends State<EditMealDialog> {
         setState(() {
           _mealController.text = selectedRecipe.name;
           _selectedRecipeImage = (selectedRecipe.imageBase64?.isNotEmpty ?? false) ? selectedRecipe.imageBase64 : null;
-          _ingredients.clear();
-          _qtyControllers.clear();
-          _selectedUnits.clear();
-          for (var ing in selectedRecipe.ingredients) {
-            _ingredients.add({
-              'name': ing['name'], 'quantity': ing['quantity'],
-              'unit': ing['unit'], 'checked': false,
-              'moment': widget.moment, 'date': widget.date,
-            });
-            _qtyControllers.add(TextEditingController(text: ing['quantity'].toString()));
-            _selectedUnits.add(ing['unit'].toString());
+        _ingredients.clear();
+        _qtyControllers.clear();
+        _selectedUnits.clear();
+        for (var ing in selectedRecipe.ingredients) {
+          final unit = ing['unit']?.toString() ?? 'QT';
+          if (!_units.contains(unit)) {
+            _units.add(unit);
           }
+          _ingredients.add({
+            'name': ing['name'], 'quantity': ing['quantity'],
+            'unit': unit, 'checked': false,
+            'moment': widget.moment, 'date': widget.date,
+          });
+          _qtyControllers.add(TextEditingController(text: ing['quantity'].toString()));
+          _selectedUnits.add(unit);
+        }
         });
       }
     });
@@ -315,6 +332,29 @@ class _EditMealDialogState extends State<EditMealDialog> {
                       children: [
                         Text('Ingrédients', style: AppTheme.titleMedium.copyWith(fontSize: 14)),
                         const Spacer(),
+                        // Bouton Reste (Cochable)
+                        GestureDetector(
+                          onTap: () => setState(() => _isLeftover = !_isLeftover),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: _isLeftover ? AppColors.primaryOrange.withValues(alpha: 0.1) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: _isLeftover ? AppColors.primaryOrange : Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(_isLeftover ? Icons.check_circle : Icons.circle_outlined, 
+                                  color: _isLeftover ? AppColors.primaryOrange : Colors.grey.shade400, size: 14),
+                                const SizedBox(width: 4),
+                                Text('C\'est un reste', style: AppTheme.labelSmall.copyWith(
+                                  color: _isLeftover ? AppColors.primaryOrange : AppColors.textSecondary, 
+                                  fontWeight: _isLeftover ? FontWeight.w700 : FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                        ),
                         GestureDetector(
                           onTap: _addIngredient,
                           child: Container(

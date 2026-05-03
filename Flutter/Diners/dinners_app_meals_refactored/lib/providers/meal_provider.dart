@@ -124,6 +124,7 @@ class MealProvider extends ChangeNotifier {
     required String moment,
     required String meal,
     required List<Map<String, dynamic>> ingredients,
+    bool isLeftover = false,
   }) async {
     final key = _getDateKey(date);
     ingredients = ingredients.map((ingredient) {
@@ -137,6 +138,7 @@ class MealProvider extends ChangeNotifier {
       moment: {
         'meal': meal,
         'ingredients': ingredients,
+        'isLeftover': isLeftover,
       }
     }, SetOptions(merge: true));
 
@@ -144,6 +146,7 @@ class MealProvider extends ChangeNotifier {
     _cachedMeals[key]![moment] = {
       'meal': meal,
       'ingredients': ingredients,
+      'isLeftover': isLeftover,
     };
     notifyListeners();
   }
@@ -178,6 +181,10 @@ class MealProvider extends ChangeNotifier {
       for (final moment in ['midi', 'soir']) {
         final entry = data[moment];
         if (entry != null && entry['ingredients'] != null) {
+          // Si c'est un reste, on n'ajoute pas les ingrédients à la liste de courses
+          final bool isLeftover = entry['isLeftover'] ?? false;
+          if (isLeftover) continue;
+
           final ingredients = List<Map<String, dynamic>>.from(
             (entry['ingredients'] as List).map((e) => Map<String, dynamic>.from(e))
           );
@@ -369,6 +376,11 @@ class MealProvider extends ChangeNotifier {
       _cachedMeals[key]?[moment]?['ingredients'] ?? []);
   }
 
+  bool isLeftoverForDate(DateTime date, String moment) {
+    final key = _getDateKey(date);
+    return _cachedMeals[key]?[moment]?['isLeftover'] ?? false;
+  }
+
   Color? getDotColor(DateTime day) {
     final key = _getDateKey(day);
     final data = _cachedMeals[key];
@@ -469,8 +481,8 @@ class MealProvider extends ChangeNotifier {
     }
   }
 
-  void updateMealAndIngredients(DateTime date, String moment, String meal, List<Map<String, dynamic>> ingredients) {
-    saveMeal(date: date, moment: moment, meal: meal, ingredients: ingredients);
+  void updateMealAndIngredients(DateTime date, String moment, String meal, List<Map<String, dynamic>> ingredients, {bool isLeftover = false}) {
+    saveMeal(date: date, moment: moment, meal: meal, ingredients: ingredients, isLeftover: isLeftover);
   }
 
   Future<void> updateExtrasForWeek(String weekKey, List<Map<String, dynamic>> extras) async {

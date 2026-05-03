@@ -19,7 +19,7 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
   List<Map<String, dynamic>> ingredients = [];
   bool isLoading = true;
   List<Map<String, dynamic>> originalIngredients = [];
-  final List<String> units = ['QT', 'g', 'kg', 'mL', 'L'];
+  final List<String> units = ['QT', 'g', 'kg', 'cl', 'L', 'c.à.s.', 'c.à.c.', 'pincée', 'sachet', 'boîte', 'botte'];
 
   @override
   void initState() {
@@ -31,6 +31,10 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
         ingredients = data.map((e) => Map<String, dynamic>.from(e)).toList();
         for (final item in ingredients) {
           item['unit'] ??= 'QT';
+          final u = item['unit'].toString();
+          if (!units.contains(u)) {
+            units.add(u);
+          }
         }
         originalIngredients = List.from(ingredients);
         isLoading = false;

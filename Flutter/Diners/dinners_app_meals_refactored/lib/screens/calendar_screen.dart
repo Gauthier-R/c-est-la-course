@@ -32,8 +32,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       moment: moment,
       initialMeal: currentText,
       initialIngredients: mealProvider.getIngredientsForDate(selectedDay, moment),
-      onValidate: (meal, ingredients) {
-        mealProvider.updateMealAndIngredients(selectedDay, moment, meal, ingredients);
+      initialIsLeftover: mealProvider.isLeftoverForDate(selectedDay, moment),
+      onValidate: (meal, ingredients, isLeftover) {
+        mealProvider.updateMealAndIngredients(selectedDay, moment, meal, ingredients, isLeftover: isLeftover);
       },
       date: selectedDay,
     );

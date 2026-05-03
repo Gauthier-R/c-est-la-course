@@ -493,6 +493,7 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
   DateTime? _selectedDate;
   String _moment = 'midi';
   bool _saving = false;
+  bool _isLeftover = false;
 
   List<DateTime> _buildDays(int weekStartDay) {
     final now = DateTime.now();
@@ -567,7 +568,42 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
                   _WeekRow(label: 'Semaine prochaine', days: days.sublist(7), today: today, selected: _selectedDate, wd: _wd, mo: _mo,
                     mealProvider: Provider.of<MealProvider>(context, listen: false),
                     onSelect: (d) => setState(() => _selectedDate = d)),
-                  const SizedBox(height: 20),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Sélecteur Reste
+                  GestureDetector(
+                    onTap: () => setState(() => _isLeftover = !_isLeftover),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _isLeftover ? AppColors.primaryOrange.withValues(alpha: 0.1) : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _isLeftover ? AppColors.primaryOrange : Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(_isLeftover ? Icons.check_circle : Icons.circle_outlined, 
+                            color: _isLeftover ? AppColors.primaryOrange : Colors.grey.shade400),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('C\'est un reste', style: AppTheme.bodyText.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _isLeftover ? AppColors.primaryOrange : AppColors.textPrimary)),
+                                Text('Les ingrédients ne seront pas ajoutés à la liste de courses.', 
+                                  style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
                   Text('Moment du repas', style: AppTheme.labelSmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
                   Builder(builder: (ctx) {
@@ -646,6 +682,7 @@ class _PlanifyDialogState extends State<_PlanifyDialog> {
         moment: _moment,
         meal: widget.recipe.name,
         ingredients: List<Map<String, dynamic>>.from(widget.recipe.ingredients),
+        isLeftover: _isLeftover,
       );
       if (mounted) {
         Navigator.pop(context);

@@ -33,7 +33,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final List<String> _types = ['Entrée', 'Plat', 'Dessert'];
   final List<String> _seasons = ['Été', 'Hiver', 'Les deux'];
   final List<String> _times = ['- 15 min', '- 1h', '+ 1h'];
-  final List<String> _units = ['QT', 'g', 'kg', 'ml', 'cl', 'L', 'c.à.s', 'c.à.c', 'pincée'];
+  final List<String> _units = ['QT', 'g', 'kg', 'cl', 'L', 'c.à.s.', 'c.à.c.', 'pincée', 'sachet', 'boîte', 'botte'];
 
   final _nameCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
@@ -52,6 +52,14 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       _descriptionCtrl.text = widget.recipeToEdit!.description;
       _imageBase64 = widget.recipeToEdit!.imageBase64;
       _ingredients.addAll(List.from(widget.recipeToEdit!.ingredients));
+      
+      // Sécurité : Ajouter les unités qui manqueraient
+      for (var ing in _ingredients) {
+        final u = ing['unit']?.toString();
+        if (u != null && !_units.contains(u)) {
+          _units.add(u);
+        }
+      }
     }
   }
 
