@@ -25,7 +25,7 @@ samples, guidance on mobile development, and a full API reference.
 
 2. Pour lancer sur un émulateur Android :
 
-- Afficher les émulateurs : `flutter emulators --launch Medium_Phone_API_35`
+- Démarrer un émulateur : `flutter emulators --launch Medium_Phone_API_35`
 - Lancement sur un émulateur : `flutter run -d emulator-5554`
 
 3. Pour mettre à jour la version Web (En ligne) :

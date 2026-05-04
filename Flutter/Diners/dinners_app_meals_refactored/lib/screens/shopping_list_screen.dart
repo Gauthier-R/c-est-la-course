@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../providers/meal_provider.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_theme.dart';
+import '../utils/date_format.dart';
 import '../widgets/lists/meal_suggestions_card.dart';
 
 class ShoppingListScreen extends StatelessWidget {
@@ -15,8 +18,9 @@ class ShoppingListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mealProvider = Provider.of<MealProvider>(context);
     final now = DateTime.now();
-    final currentWeekStart = now.subtract(Duration(days: now.weekday - 1));
+    final currentWeekStart = getWeekStart(now, mealProvider.weekStartDay);
     final nextWeekStart = currentWeekStart.add(const Duration(days: 7));
 
     return Scaffold(

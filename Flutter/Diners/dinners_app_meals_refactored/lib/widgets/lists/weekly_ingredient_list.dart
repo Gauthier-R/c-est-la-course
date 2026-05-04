@@ -64,7 +64,7 @@ class WeeklyIngredientList extends StatelessWidget {
       );
     }
 
-    final weekKey = getWeekKey(weekStart);
+    final weekKey = getWeekKey(weekStart, mealProvider.weekStartDay);
     final weekDates = List.generate(
       7,
       (i) => DateFormat('yyyy-MM-dd').format(weekStart.add(Duration(days: i))),

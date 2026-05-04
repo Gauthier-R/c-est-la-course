@@ -31,7 +31,7 @@ class ShoppingListCard extends StatelessWidget {
 
   void _showAddIngredientDialog(BuildContext context) {
     final mealProvider = Provider.of<MealProvider>(context, listen: false);
-    final weekKey = getWeekKey(DateTime.now());
+    final weekKey = getWeekKey(DateTime.now(), mealProvider.weekStartDay);
 
     final TextEditingController nameController = TextEditingController();
     final TextEditingController qtyController = TextEditingController(text: '1');

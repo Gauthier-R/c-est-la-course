@@ -436,7 +436,7 @@ class MealProvider extends ChangeNotifier {
         final soir = _cachedMeals[key]?['soir']?['ingredients'];
         final hasIngredients = (midi is List && midi.isNotEmpty) || (soir is List && soir.isNotEmpty);
         if (hasIngredients) {
-          final wk = getWeekKey(date);
+          final wk = getWeekKey(date, weekStartDay);
           seenWeeks.add(wk);
           print('✅ Ajouté via midi/soir : $wk (source : $key)');
         }
@@ -451,9 +451,9 @@ class MealProvider extends ChangeNotifier {
   return seenWeeks
     .map((key) {
       try {
-        final monday = getStartOfWeekFromKey(key);
-        print('📆 Conversion $key → $monday');
-        return monday;
+        final start = getStartOfWeekFromKey(key, weekStartDay);
+        print('📆 Conversion $key → $start');
+        return start;
       } catch (e) {
         print('⚠️ Erreur de conversion $key : $e');
         return null;
@@ -461,6 +461,35 @@ class MealProvider extends ChangeNotifier {
     })
     .whereType<DateTime>()
     .where((date) => date.isBefore(DateTime(now.year, now.month, now.day)))
+    .where((weekStart) {
+      // ✅ Sécurité : on ne garde la semaine que si elle contient RÉELLEMENT quelque chose
+      // (repas sur un des 7 jours ou extras sur la clé de semaine)
+      final weekDates = List.generate(7, (i) => dayFormat.format(weekStart.add(Duration(days: i))));
+      final hasMeals = weekDates.any((d) {
+        final data = _cachedMeals[d];
+        if (data == null) return false;
+        
+        bool hasMidi = false;
+        if (data['midi'] != null && !(data['midi']['isLeftover'] ?? false)) {
+          final ing = data['midi']['ingredients'];
+          hasMidi = ing is List && ing.isNotEmpty;
+        }
+
+        bool hasSoir = false;
+        if (data['soir'] != null && !(data['soir']['isLeftover'] ?? false)) {
+          final ing = data['soir']['ingredients'];
+          hasSoir = ing is List && ing.isNotEmpty;
+        }
+
+        return hasMidi || hasSoir;
+      });
+      if (hasMeals) return true;
+
+      // Vérifier aussi les extras pour cette semaine
+      final wk = getWeekKey(weekStart, weekStartDay);
+      final extras = _cachedMeals[wk]?['extras'];
+      return (extras is List && extras.isNotEmpty);
+    })
     .toList()
   ..sort((a, b) => b.compareTo(a));
 

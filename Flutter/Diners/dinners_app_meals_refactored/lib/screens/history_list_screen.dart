@@ -27,7 +27,8 @@ class _HistoryListScreenState extends State<HistoryListScreen> {
   }
 
   void _showAddDialog(BuildContext context) {
-    final weekKey = getWeekKey(widget.weekStart);
+    final mealProvider = Provider.of<MealProvider>(context, listen: false);
+    final weekKey = getWeekKey(widget.weekStart, mealProvider.weekStartDay);
     showAddIngredientDialog(
       context,
       weekKey: weekKey,

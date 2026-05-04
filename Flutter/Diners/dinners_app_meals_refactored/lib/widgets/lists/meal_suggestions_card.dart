@@ -731,9 +731,11 @@ class _WeekRow extends StatelessWidget {
         final isSel  = selected != null && d.year == selected!.year && d.month == selected!.month && d.day == selected!.day;
         final isToday= d.year == today.year && d.month == today.month && d.day == today.day;
         final isPast = d.isBefore(DateTime(today.year, today.month, today.day));
+        final isDifferentMonth = d.month != today.month;
         final dotColor = mealProvider.getDotColor(d);
+        
         return Expanded(child: GestureDetector(
-          onTap: isPast ? null : () => onSelect(d),
+          onTap: () => onSelect(d),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
             padding: const EdgeInsets.symmetric(vertical: 6),
@@ -746,11 +748,13 @@ class _WeekRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(wd[d.weekday - 1], style: AppTheme.labelSmall.copyWith(
-                  fontSize: 9, color: isPast ? Colors.grey.shade300 : isSel ? Colors.white : AppColors.textSecondary)),
+                  fontSize: 9, color: isSel ? Colors.white : (isPast ? Colors.grey.shade400 : AppColors.textSecondary))),
                 const SizedBox(height: 2),
-                Text('${d.day}', style: AppTheme.bodyText.copyWith(
-                  fontSize: 13, fontWeight: FontWeight.w700,
-                  color: isPast ? Colors.grey.shade300 : isSel ? Colors.white : AppColors.textPrimary)),
+                Text('${d.day}${d.day == 1 || isDifferentMonth ? ' ${mo[d.month - 1]}' : ''}', 
+                  style: AppTheme.bodyText.copyWith(
+                    fontSize: d.day == 1 || isDifferentMonth ? 10 : 13, 
+                    fontWeight: FontWeight.w700,
+                    color: isSel ? Colors.white : (isPast ? Colors.grey.shade400 : AppColors.textPrimary))),
                 const SizedBox(height: 3),
                 // Pastille : visible seulement si non sélectionné pour ne pas confondre
                 if (dotColor != null && !isSel)

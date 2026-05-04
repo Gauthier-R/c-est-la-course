@@ -54,7 +54,7 @@ class _EditWeeklyListDialogState extends State<EditWeeklyListDialog> {
   @override
   Widget build(BuildContext context) {
     final mealProvider = Provider.of<MealProvider>(context, listen: false);
-    final weekKey = getWeekKey(widget.weekStart);
+    final weekKey = getWeekKey(widget.weekStart, mealProvider.weekStartDay);
 
     return Dialog(
       backgroundColor: Colors.transparent,

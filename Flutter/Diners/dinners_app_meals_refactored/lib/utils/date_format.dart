@@ -46,7 +46,12 @@ DateTime getStartOfWeekFromKey(String weekKey, [int startDay = 1]) {
 
     final jan4 = DateTime(year, 1, 4);
     final firstWeekMonday = jan4.subtract(Duration(days: jan4.weekday - DateTime.monday));
-    return firstWeekMonday.add(Duration(days: (week - 1) * 7));
+    final targetMonday = firstWeekMonday.add(Duration(days: (week - 1) * 7));
+    
+    if (startDay == 1) return targetMonday;
+    // Si on demande un autre jour de début, on trouve le début de semaine (startDay) 
+    // correspondant à ce lundi.
+    return getWeekStart(targetMonday, startDay);
   }
   throw FormatException("Invalid week key format: $weekKey");
 }
